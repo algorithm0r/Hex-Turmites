@@ -8,3 +8,9 @@ Thumbs.db
 data/
 # large regenerable exports (regenerate with: node runner.mjs ...)
 *.csv
+
+# browser-check scratch
+.playwright-mcp/
+
+# editor-local (Peacock window colour etc.)
+.vscode/

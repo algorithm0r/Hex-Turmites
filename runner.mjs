@@ -21,7 +21,7 @@ const ticksOverride = parseInt(flag('ticks', '0'), 10);
 // class X`, so once the leading 'use strict' directive is stripped the top-level names attach
 // to globalThis and read as fast native globals (no vm proxy → no inlining penalty).
 const indirectEval = eval; // aliased → indirect eval runs in the global (sloppy) realm
-for (const f of ['util.js', 'params.js', 'engine.js', 'agent.js', 'world.js']) {
+for (const f of ['util.js', 'params.js', 'hex.js', 'genome.js', 'engine.js', 'world.js']) {
   let src = readFileSync(path.join(__dirname, 'src', f), 'utf8');
   src = src.replace(/^\s*(['"])use strict\1;?/, '');
   indirectEval(src);
@@ -37,16 +37,18 @@ const db = createDB(Object.assign({}, P.db, { transport: 'direct', db: dbName })
 for (let r = 0; r < reps; r++) {
   const run = 'run_' + String(r).padStart(3, '0');
   db.config.run = run;
-  const world = new World(800, 600);
+  const world = new World();
   const engine = new GameEngine();
   const samples = [];
   for (let t = 1; t <= limit; t++) {
     engine.tick = t;
     world.update(engine);
-    if (t % P.reportingPeriod === 0) samples.push({ tick: t, meanX: world.meanX() });
+    if (t % P.reportingPeriod === 0) { samples.push(world.stats()); world.resetPeriodCounters(); }
   }
-  const pkt = db.packet(P, { run, samples, finalMeanX: world.meanX() });
+  const final = world.stats();
+  const pkt = db.packet(P, { run, samples, final });
   const res = await db.insert(collection || run, pkt);
-  console.log(run + ': finalMeanX=' + world.meanX().toFixed(3) + '  saved=' + JSON.stringify(res));
+  console.log(run + ': pop=' + final.population + ' density=' + final.density.toFixed(3) +
+    ' genotypes=' + final.distinctGenotypes + '  saved=' + JSON.stringify(res));
 }
 await db.close();

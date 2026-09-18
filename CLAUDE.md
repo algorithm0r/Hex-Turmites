@@ -25,6 +25,19 @@ Turmites with heredity on a hex grid: each organism is a 2D Turing machine with 
 - **DB:** the vendored standard client `src/db.js` (see `~/.claude/conventions.md` §4).
   Use `db.packet()`, `db.nextBatch()`, and `db.scratch()` for throwaway work.
 
+## Model invariants (don't break these silently)
+- **The six directions in `hex.js` are in clockwise order and a face is an index into them**,
+  so a right turn is `(face+1)%6`. Reordering that list silently changes every rotation.
+- **An organism reproduces into the cell it SENSED** — the pre-rotation faced cell — and the
+  rotation applies to the next tick. That two-step is what makes "spawn a copy, then turn and
+  see it" work, and it is what `smoketest.mjs` pins.
+- **A newborn does not act on the tick it was born** (`bornTick` guard), or a lineage runs
+  ahead of the clock inside one update.
+- **Energy is earned on colour CHANGE.** An organism that never recolours never earns and so
+  can never reproduce — that is why both demonstrator genomes flip colour every tick.
+- `reproCost` is calibrated against income (~1/tick), not genome size. At 1 the economy
+  constrains nothing.
+
 ## Conventions
 Follow `~/.claude/conventions.md`. STATUS is overwritten every close (present truth); DEVLOG is
 append-only, newest on top (history); DEVPLAN stages carry `[ DONE ] / [ ACTIVE ] / [ PLANNED ]`

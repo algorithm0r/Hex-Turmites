@@ -74,24 +74,50 @@ the params pattern, and **the rule-space visualization tools** — the frequency
 machinery is agnostic to what a condition *is*, so it transfers directly.
 
 ## Built
-- Scaffolded from engine v2 (vanilla-JS canvas + standard DB client). Demo "drifters"
-  model runs in-browser and headless.
+- Scaffolded from engine v2 (vanilla-JS canvas + standard DB client).
+- **Stage 1 complete.** The face model runs in-browser and headless: hex geometry with
+  orientation, the `(self, faced)` genome, sense→recolour→rotate→reproduce-forward, mutation
+  on copy, rule-absence death. Both demonstrator organisms verified by `smoketest.mjs`.
 
 ## Not yet built
-- Everything above.
+- Stages 2-4 below.
+
+## Settled in Stage 1
+- **Fork 1 — child orientation:** `inherit`, and specifically the BIRTH DIRECTION (the
+  parent's face at sense time, before the rule's rotation). This is what makes the walker a
+  straight line. `offsetR` / `offsetL` / `random` are parameters, unswept.
+- **Fork 2 — reproduction gating:** fixed cost, `reproCost`. The scale matters more than the
+  mechanism: income is ~1 energy/tick, so the cost has to be **tens of ticks** to constrain
+  anything. At `reproCost: 1` the grid saturates almost immediately.
+- **Fork 3 — rotation cost:** free (`rotationCost: 0`), unswept. Left as a dial.
 
 ## Stages
-### Stage 1 — The face model  [ ACTIVE ]
-- [ ] Hex grid + axial coords + the 6 neighbor offsets (port geometry from Hex CA)
-- [ ] Cell state gains an **orientation** field (1 of 6) — new array, new layout
-- [ ] Genome representation: rule table on `(self_color, faced_color)` → `(color, rotation, ...)`
-- [ ] Tick: sense faced cell → fire rule → set color, rotate, reproduce-if-empty
-- [ ] Mutation on copy; settle fork 1 (child orientation) and fork 2 (reproduction gating)
-- [ ] `smoketest.mjs` asserts a real invariant (not the demo drift check)
-**Done when:** a hand-written spinner genome tiles a disc, and a
-reproduce-forward-then-die genome visibly walks — both in-browser and headless.
+### Stage 1 — The face model  [ DONE 2026-09-18 ]
+- [x] Hex grid + the 6 neighbour offsets (ported from Hex CA, now in `src/hex.js`)
+- [x] Cell state gains an **orientation** field (1 of 6)
+- [x] Genome representation: rule table on `(self_color, faced_color)` → `(colour, rotation)`
+- [x] Tick: sense faced cell → fire rule → set colour, rotate, reproduce-if-empty
+- [x] Mutation on copy; forks 1-3 settled (above)
+- [x] `smoketest.mjs` asserts the real invariants
+- [x] Seeded PRNG throughout the sim core; runs replay exactly from `PARAMETERS.seed`
+**Done when:** a hand-written spinner genome tiles a disc, and a reproduce-forward-then-die
+genome visibly walks — both in-browser and headless.  ✓ verified, see DEVLOG 2026-09-18.
+
+### Stage 1b — The economy is not yet doing real work  [ ACTIVE ]
+The Stage 1 mechanism is correct, but the model as parameterised has one attractor: selection
+purges lethal rules fast (12% → ~1% of slots while density is still 0.4) and after that the
+only death left is `pDeath`, so the grid fills to ~0.98 and stays there. With 6 conditions the
+rule table is small enough that evolution solves it almost immediately — which is fork 4's
+"the dynamics may be too regular" showing up empirically, earlier than expected.
+- [ ] Decide whether saturation is a problem to fix or the honest result to report
+- [ ] Candidate pressures, if it needs one: crowding cost, energy cap, per-tick metabolism,
+      an ageing term, or a cost that scales with the number of non-absent rules
+- [ ] Sweep `reproCost` x `pDeath` x `mutationRate` properly and map the regimes
+**Done when:** there is either a parameter regime with sustained non-saturating dynamics, or
+a written argument that saturation is the model's real behaviour and the interest is elsewhere.
 
 ### Stage 2 — Rule-space visualization  [ PLANNED ]
+- [ ] Genotype-colour contrast is washed out (the JL projection averages toward grey) — stretch it
 - [ ] Port the Hex CA visualizer set (genotype coloring, sort-by-dead, clustering,
       possessed/encountered condition split, transition matrices over time)
 - [ ] Data export sufficient for post-hoc Muller plots
