@@ -17,14 +17,29 @@ the shared engine v2.
 ## In the browser
 `S` seeds a spinner, `W` a walker, `R` returns to the evolving default. `G` toggles genotype
 colouring (clonal families share a hue, so a sweep is the field changing colour), `F` toggles
-the face markers. The four gutter graphs are density, distinct genotypes, top clone share, and
-the fraction of genome slots that are lethal.
+the face markers.
+
+Keys `1`-`4` switch the stats panel:
+1. **Population** — density, effective and distinct genotypes, top clone share, lethal slots.
+2. **Gene pool** — the allele table. For each condition, what fraction of the population
+   carries each output, plus one stacked strip per condition over time. At n=2 this is the
+   *complete* state of the gene pool (6x7), not a summary of it.
+3. **Atlas** — all 117,649 possible n=2 organisms as a 343x343 image (7^6 = 343^2), lit by
+   occupancy. Bright = alive now, dim = visited earlier. The 7x7 bands are labelled: the row
+   band is the organism's rule when it is c0 facing empty, the column band when it is c1.
+4. **Lineages** — a Muller-style stack of every genotype that ever held share, each with its
+   rule table spelled out.
+
+**Read the diversity number carefully.** "Distinct genotypes" counts singletons, so it runs
+far ahead of how diverse the population actually is; the effective number (Hill N1,
+`exp(Shannon)`) is the honest headline. A typical run shows ~680 distinct but N1 ~150.
 
 ## Layout
-- `src/` — sim core: `hex.js` (geometry, ported from ../Hex CA), `genome.js` (the rule table),
-  `world.js` (the grid and the tick), plus `engine`, `params`, `observer`, `datamanager`,
-  `charts`, `util` + `db.js` (vendored standard DB client) + `ui.js`/`main.js` (browser-only,
-  all DOM).
+- `src/` — sim core: `hex.js` (geometry, ported from ../Hex CA), `genome.js` (the rule table
+  and the numeric genome id), `world.js` (the grid and the tick), `stats.js` (population
+  genetics — alleles, Hill diversity, genotype counts, atlas occupancy), plus `engine`,
+  `params`, `observer`, `datamanager`, `util` + `db.js` (vendored standard DB client) +
+  `views.js`/`ui.js`/`main.js` (browser-only, all DOM).
 - `runner.mjs` / `smoketest.mjs` — headless entry points.
 - `DEVPLAN.md` / `DEVLOG.md` — the plan (forward) and the log (backward, append-only).
 

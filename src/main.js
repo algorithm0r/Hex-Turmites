@@ -1,12 +1,12 @@
 'use strict';
 // Browser entry + wiring (not loaded headlessly). reset() rebuilds the world from the
 // current PARAMETERS.
-var gameEngine, world, dataManager, db, graphs;
+var gameEngine, world, dataManager, db, stats, views;
 
 // The grid decides how big the canvas has to be — at the default 120x80 with cellSize 7 the
 // board is ~1274x984, so a fixed canvas silently crops the bottom rows. The graphs get their
 // own gutter to the right of the board rather than being drawn over it.
-var GUTTER = 230;
+var PANEL_W = PARAMETERS.panelWidth;
 
 function boardWidth() {
   return Math.ceil(PARAMETERS.gridCols * PARAMETERS.cellSize * 1.5 + PARAMETERS.cellSize * 2);
@@ -15,7 +15,8 @@ function boardWidth() {
 function fitCanvas() {
   const size = PARAMETERS.cellSize, sqrt3 = Math.sqrt(3);
   const cv = gameEngine.ctx.canvas;
-  cv.width  = boardWidth() + GUTTER;
+  PANEL_W = PARAMETERS.panelWidth;
+  cv.width  = boardWidth() + PANEL_W;
   cv.height = Math.max(320, Math.ceil(PARAMETERS.gridRows * size * sqrt3 + size * 2));
 }
 
@@ -23,19 +24,14 @@ function reset() {
   gameEngine.clear();
   fitCanvas();
   world = new World();
-  const gw = GUTTER - 30, gh = 62, gx = boardWidth() + 12;
-  graphs = {
-    density:   new LineGraph(gx, 10,  gw, gh, 'density'),
-    genotypes: new LineGraph(gx, 82,  gw, gh, 'distinct genotypes'),
-    topClone:  new LineGraph(gx, 154, gw, gh, 'top clone share'),
-    lethal:    new LineGraph(gx, 226, gw, gh, 'lethal conditions'),
-  };
+  stats = new Stats(world);
+  views = new Views(world, stats);
   db = createDB(PARAMETERS.db);
-  dataManager = new DataManager(world, db, graphs);
+  dataManager = new DataManager(world, db, stats);
   gameEngine.add(world);
   gameEngine.add(new Observer(world));
   gameEngine.add(dataManager);
-  for (const k in graphs) gameEngine.add(graphs[k]);
+  gameEngine.add(views);
   setStatus('seeded ' + world.population() + ' organisms');
 }
 
@@ -65,12 +61,14 @@ function toggleGenotypeView() {
   PARAMETERS.drawMode = PARAMETERS.drawMode === 'state' ? 'genotype' : 'state';
 }
 function toggleFaces() { PARAMETERS.showFaces = !PARAMETERS.showFaces; }
+function setStatsPage(i) { PARAMETERS.statsPage = i; }
 
 window.addEventListener('keydown', function (e) {
   const t = e.target.tagName;
   if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
   const k = e.key.toLowerCase();
-  if (k === 'g') toggleGenotypeView();
+  if (k >= '1' && k <= '4') setStatsPage(parseInt(k, 10) - 1);
+  else if (k === 'g') toggleGenotypeView();
   else if (k === 'f') toggleFaces();
   else if (k === 'r') reset();
   else if (k === 's') seedNamed('spinner');

@@ -116,13 +116,28 @@ rule table is small enough that evolution solves it almost immediately — which
 **Done when:** there is either a parameter regime with sustained non-saturating dynamics, or
 a written argument that saturation is the model's real behaviour and the interest is elsewhere.
 
-### Stage 2 — Rule-space visualization  [ PLANNED ]
-- [ ] Genotype-colour contrast is washed out (the JL projection averages toward grey) — stretch it
-- [ ] Port the Hex CA visualizer set (genotype coloring, sort-by-dead, clustering,
-      possessed/encountered condition split, transition matrices over time)
-- [ ] Data export sufficient for post-hoc Muller plots
-**Done when:** a phase transition in the dominant population is legible from the panel
-while the sim runs.
+### Stage 2 — Rule-space visualization  [ DONE 2026-09-18 ]
+- [x] Four-page stats panel (keys 1-4), all fed from one genetics pass per reporting period
+- [x] Allele table: per condition, the population's distribution over outputs — complete at
+      n=2, plus a stacked strip per condition over time
+- [x] **Genome-space atlas**: all 117,649 n=2 genomes as a 343x343 image (7^6 = 343^2), with
+      the 7x7 bands labelled by the rule they correspond to. Occupancy now, plus ever-visited.
+- [x] Muller-style lineage stack with each genotype's rule table spelled out
+- [x] Diversity done properly: Hill N1 (`exp(Shannon)`) and inverse Simpson, not just a count
+- [x] Numeric genome id (base-(3n+1)), bijection verified over the whole n=2 space
+**Done when:** a phase transition in the dominant population is legible from the panel while
+the sim runs.  ✓ the lethal-rule purge is visible as the grey band collapsing in every strip.
+
+### Stage 2b — Visualization follow-ups  [ PLANNED ]
+- [ ] Genotype-colour contrast on the grid is washed out (the JL projection averages toward
+      grey) — stretch it
+- [ ] Hex CA's raster orderings (sort-by-dead, frequency, spectral clustering) and the
+      possessed/encountered condition split
+- [ ] Transition matrices over time
+- [ ] The atlas has no meaningful adjacency beyond the band structure — a Hamming-preserving
+      (Gray-code) layout would make distance mean something
+- [ ] Packet export sufficient for post-hoc Muller plots at higher resolution than the live
+      top-40-per-sample
 
 ### Stage 3 — The n=2 atlas  [ PLANNED ]
 - [ ] Exhaustive enumeration + simulation of all 117,649 n=2 genomes

@@ -14,7 +14,7 @@ import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const indirectEval = eval; // aliased → runs in the global (sloppy) realm, so `var` leaks to globalThis
-for (const f of ['util.js', 'params.js', 'hex.js', 'genome.js', 'engine.js', 'world.js']) {
+for (const f of ['util.js', 'params.js', 'hex.js', 'genome.js', 'engine.js', 'world.js', 'stats.js']) {
   let src = readFileSync(path.join(__dirname, 'src', f), 'utf8');
   src = src.replace(/^\s*(['"])use strict\1;?/, ''); // strip directive so declarations leak to global
   indirectEval(src);
@@ -156,6 +156,55 @@ console.log('shipped defaults (reproCost=' + DEFAULTS.reproCost + ' pDeath=' + D
     ' lethalConds=' + (s.meanAbsentRules * 100).toFixed(1) + '%' +
     ' births=' + lastWorld.births + ' deaths=' + lastWorld.deaths +
     ' (last seed ' + seeds[seeds.length - 1] + ')');
+}
+
+// ─── 5. The genetics layer ───────────────────────────────────────────────────────────────
+console.log('genome identity and diversity');
+{
+  const { genomeId, genomeFromId, nConditions, Stats, spinnerGenome } = globalThis;
+  // The atlas is only honest if id <-> genome is a bijection over the WHOLE space.
+  let bad = 0;
+  const buf = new Int8Array(nConditions(2));
+  for (let i = 0; i < 117649; i++) { genomeFromId(i, 2, buf); if (genomeId(buf, 0, 6, 2) !== i) bad++; }
+  check('genome id is a bijection over all 117,649 n=2 genomes', bad === 0, bad + ' mismatches');
+
+  Object.assign(P, DEFAULTS, { seed: 4242 });
+  const w = new World();
+  const st = new Stats(w);
+  run(w, 600);
+  const rec = st.sample(600);
+
+  let rowsOk = true;
+  for (let q = 0; q < st.ncond; q++) {
+    let sum = 0;
+    for (let sl = 0; sl < st.nslot; sl++) sum += rec.alleles[q * st.nslot + sl];
+    if (Math.abs(sum - 1) > 1e-4) rowsOk = false;
+  }
+  check('every condition row of the allele table sums to 1', rowsOk);
+  check('effective genotypes <= distinct (Hill N1 bound)', rec.effective <= rec.distinct + 1e-9,
+        'effective=' + rec.effective.toFixed(1) + ' distinct=' + rec.distinct);
+  check('inverse Simpson <= effective (N2 <= N1)', rec.simpson <= rec.effective + 1e-9,
+        'N2=' + rec.simpson.toFixed(1) + ' N1=' + rec.effective.toFixed(1));
+
+  const ex = st.explored();
+  check('atlas laid out as 343 x 343', st.atlasSide === 343, 'side=' + st.atlasSide);
+  check('explored a strict subset of genome space', ex.seen > 0 && ex.seen < ex.total,
+        ex.seen + '/' + ex.total + ' = ' + (ex.frac * 100).toFixed(3) + '%');
+  console.log('    distinct=' + rec.distinct + '  effective(N1)=' + rec.effective.toFixed(1) +
+    '  inverseSimpson(N2)=' + rec.simpson.toFixed(1) + '  top=' + (rec.topShare * 100).toFixed(1) + '%' +
+    '  explored=' + (ex.frac * 100).toFixed(3) + '%');
+
+  // A monoculture must read as diversity 1, whatever the population size.
+  Object.assign(P, { seed: 7, gridCols: 41, gridRows: 41, n: 2, initialSeeds: 0,
+    mutationRate: 0, pDeath: 0, absentP: 0, reproCost: 1, rotationCost: 0,
+    energyPerTransition: 1, childEnergy: 0, childOrientation: 'inherit', asyncUpdate: true });
+  const w2 = new World();
+  w2.place(20 * w2.rows + 20, 0, 0, spinnerGenome());
+  const st2 = new Stats(w2);
+  run(w2, 40);
+  const r2 = st2.sample(40);
+  check('a clonal population has effective diversity 1', Math.abs(r2.effective - 1) < 1e-6,
+        'effective=' + r2.effective.toFixed(6) + ' pop=' + r2.population);
 }
 
 console.log('smoke: ' + (failures === 0 ? 'PASS' : 'FAIL (' + failures + ')'));

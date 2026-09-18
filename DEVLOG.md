@@ -3,6 +3,61 @@ Newest entry on top. **Append only — never edit past entries.**
 
 <!-- append new entries above this line -->
 
+## 2026-09-18 — Stage 2: visualizing the gene pool
+**Done:** a four-page stats panel (keys 1-4), all fed from a single genetics pass per
+reporting period. New `src/stats.js` (population genetics) and `src/views.js` (the pages);
+`genome.js` gained a numeric genome id and its inverse.
+
+**The move that made the rest possible:** a genome is now read as a base-(3n+1) number, so at
+n=2 every possible organism has an id in 0..117648 and the whole genome space indexes into an
+ordinary array. Clone counting stopped using string keys, and the atlas became drawable. The
+bijection is verified exhaustively over all 117,649 genomes in the smoke test — the atlas is
+only honest if id <-> genome is exact.
+
+**The four pages:**
+1. *Population* — density, effective + distinct genotypes, top clone share, lethal slots.
+2. *Gene pool* — the allele table: for each condition, the population's distribution over
+   outputs, plus one stacked strip per condition over time. At n=2 this is the COMPLETE state
+   of the gene pool (6x7), not a summary. The lethal-rule purge is directly visible here as
+   the grey "die" band collapsing in every strip within the first few samples.
+3. *Atlas* — all 117,649 possible organisms as a 343x343 image, because 7^6 = 343^2 exactly.
+   Bright = alive now, dim = visited earlier. The 7x7 band structure is labelled and the
+   labelling was verified against the id arithmetic, not assumed: `y = id/343` is the first
+   three conditions so the row band is the rule for "c0 facing empty", and `x = id%343` makes
+   the column band "c1 facing empty". Adjacency *within* a band is not meaningful and the
+   caption says so.
+4. *Lineages* — a Muller-style stack of every genotype that ever held share, each with its
+   rule table spelled out.
+
+**Measured — the diversity number was lying.** Distinct-genotype count runs far ahead of any
+sensible reading of diversity because it counts singletons. Added Hill numbers:
+
+| | distinct | effective (Hill N1) | inverse Simpson (N2) | top clone |
+|---|---|---|---|---|
+| t=600  | 181 | 40  | 22.6 | 9.5% |
+| t=3200 | 680 | 151 | —    | 8.1% |
+
+So the population behaves like ~150 equally-common genotypes, not 680 — a 4.5x overstatement.
+STATUS and the panel now quote the effective number first. Pinned by smoke checks that N2 <=
+N1 <= distinct and that a clonal population reads as exactly 1.
+
+Genome space explored after a few thousand ticks: **~2-3% of 117,649**. Evolution is visiting
+a small, structured corner of the space, and the top "die" row band of the atlas stays empty —
+an organism whose rule for "c0 facing empty" is death leaves no descendants.
+
+**State:** `node smoketest.mjs` → PASS, 21 checks, 10/10 repeat runs. Browser-checked on all
+four pages, no console errors.
+
+**Not a regression, recorded so the next instance does not chase it:** the headless browser
+reports 0-15 ticks/sec because it never composites, so `requestAnimationFrame` does not fire
+(`gameEngine.running` is true and `rafFramesPerSec` is 0). Direct timings are the real cost:
+`world.update` 0.55 ms/tick, observer draw 3.6 ms/frame, heaviest panel page 2.6 ms. Framerate
+on a real screen is Chris's to confirm.
+
+**Next:** Stage 1b — the saturating attractor. Stage 2b holds the visualization follow-ups
+(grid genotype-colour contrast, Hex CA's raster orderings, transition matrices, a
+Hamming-preserving atlas layout).
+
 ## 2026-09-18 — Stage 1: the face model runs
 **Done:** built the egocentric turmite model on top of the scaffold. New `src/hex.js` (hex
 geometry ported from ../Hex CA — flat-top even-q, six directions in clockwise order so a face

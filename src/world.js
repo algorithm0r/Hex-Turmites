@@ -157,7 +157,8 @@ var World = class World {
     const counts = new Map();
     for (let i = 0; i < this.N; i++) {
       if (this.color[i] === -1) continue;
-      const k = genomeKey(this.genome, i * this.ncond, this.ncond);
+      const k = genomeIdExact(this.n) ? genomeId(this.genome, i * this.ncond, this.ncond, this.n)
+                                      : genomeKey(this.genome, i * this.ncond, this.ncond);
       counts.set(k, (counts.get(k) || 0) + 1);
     }
     let top = 0;

@@ -45,6 +45,8 @@ var PARAMETERS = {
   seedGenome: 'random',  // 'random' | 'spinner' | 'walker' (the last two are n=2 only)
 
   // --- view ---
+  statsPage: 0,          // 0 population, 1 gene pool, 2 atlas, 3 lineages (keys 1-4)
+  panelWidth: 430,       // the stats panel; the atlas wants >= 360 to draw 343px at 1:1
   drawMode: 'state',     // 'state' | 'genotype'
   showFaces: true,       // draw the orientation tick — without it a spinner and a walker
                          // look identical, and orientation is the whole point of this model

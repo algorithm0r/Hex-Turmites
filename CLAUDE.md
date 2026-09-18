@@ -37,6 +37,12 @@ Turmites with heredity on a hex grid: each organism is a 2D Turing machine with 
   can never reproduce — that is why both demonstrator genomes flip colour every tick.
 - `reproCost` is calibrated against income (~1/tick), not genome size. At 1 the economy
   constrains nothing.
+- **`genomeId` reads the rule table as a base-(3n+1) number with q=0 as the MOST significant
+  digit.** The atlas layout depends on it: at n=2, `y = id/343` is the first three conditions
+  and `x = id%343` the last three, which is why the row band means "its rule when c0 facing
+  empty". Change the digit order and the atlas silently means something else. The smoke test
+  pins the bijection over all 117,649 genomes.
+- **Quote the effective number, not the distinct count**, whenever describing diversity.
 
 ## Conventions
 Follow `~/.claude/conventions.md`. STATUS is overwritten every close (present truth); DEVLOG is

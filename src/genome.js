@@ -38,6 +38,33 @@ function genomeToString(g, n) {
   return parts.join('  ');
 }
 
+// Numeric identity for a genome: read the rule table as a base-(3n+1) number, with
+// RULE_ABSENT as digit 0. At n=2 that is a 6-digit base-7 number, so every possible organism
+// has an id in 0..117648 — the whole genome space indexes into an ordinary array. This is
+// what makes the atlas view possible, and it makes clone counting allocation-free.
+//
+// Exact while (3n+1)^ncond <= 2^53: fine for n=2 (1.2e5) and n=3 (1e12), NOT for n>=4, where
+// genomeKey() is the fallback.
+function genomeIdExact(n) { return genomeSpaceSize(n) <= Number.MAX_SAFE_INTEGER; }
+
+function genomeId(g, base, ncond, n) {
+  const radix = 3 * n + 1;
+  let id = 0;
+  for (let q = 0; q < ncond; q++) id = id * radix + (g[base + q] + 1);
+  return id;
+}
+
+// Inverse of genomeId — unpack an id back into a rule table.
+function genomeFromId(id, n, out) {
+  const ncond = nConditions(n), radix = 3 * n + 1;
+  const g = out || new Int8Array(ncond);
+  for (let q = ncond - 1; q >= 0; q--) {
+    g[q] = (id % radix) - 1;
+    id = Math.floor(id / radix);
+  }
+  return g;
+}
+
 // A canonical string key for genotype identity (clone counting, genotype colouring).
 function genomeKey(g, base, ncond) {
   let s = '';

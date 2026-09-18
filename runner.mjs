@@ -21,7 +21,7 @@ const ticksOverride = parseInt(flag('ticks', '0'), 10);
 // class X`, so once the leading 'use strict' directive is stripped the top-level names attach
 // to globalThis and read as fast native globals (no vm proxy → no inlining penalty).
 const indirectEval = eval; // aliased → indirect eval runs in the global (sloppy) realm
-for (const f of ['util.js', 'params.js', 'hex.js', 'genome.js', 'engine.js', 'world.js']) {
+for (const f of ['util.js', 'params.js', 'hex.js', 'genome.js', 'engine.js', 'world.js', 'stats.js']) {
   let src = readFileSync(path.join(__dirname, 'src', f), 'utf8');
   src = src.replace(/^\s*(['"])use strict\1;?/, '');
   indirectEval(src);

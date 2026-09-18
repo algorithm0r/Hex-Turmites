@@ -46,6 +46,10 @@ function buildButtons() {
     ['Spinner (S)', function () { seedNamed('spinner'); }],
     ['Walker (W)', function () { seedNamed('walker'); }],
     ['Genotype view (G)', function () { toggleGenotypeView(); }],
+    ['Population (1)', function () { setStatsPage(0); }],
+    ['Gene pool (2)', function () { setStatsPage(1); }],
+    ['Atlas (3)', function () { setStatsPage(2); }],
+    ['Lineages (4)', function () { setStatsPage(3); }],
     ['Faces (F)', function () { toggleFaces(); }],
   ];
   for (const [label, fn] of defs) {

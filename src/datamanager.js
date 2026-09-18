@@ -11,10 +11,10 @@
 // NOTE: in the browser this auto-flushes at epoch (fire-and-forget, errors logged). The
 // headless runner (runner.mjs) drives ticks and flushes explicitly so it can await the write.
 var DataManager = class DataManager {
-  constructor(world, db, graphs) {
+  constructor(world, db, stats) {
     this.world = world;
     this.db = db;
-    this.graphs = graphs || {};
+    this.stats = stats;
     this.samples = [];
     this.run = (PARAMETERS.db && PARAMETERS.db.run) || 'run';
     this.flushed = false;
@@ -22,16 +22,19 @@ var DataManager = class DataManager {
 
   update(engine) {
     if (engine.tick % PARAMETERS.reportingPeriod === 0) {
-      const s = this.world.stats();
-      this.samples.push(s);
+      // Stats does the whole genetics pass; its record IS the stored sample, minus the
+      // per-sample genotype head, which is for the live views and would bloat the packet.
+      const s = this.stats.sample(engine.tick);
       this.world.resetPeriodCounters();
-      if (this.graphs.density) this.graphs.density.push(s.density);
-      if (this.graphs.genotypes) this.graphs.genotypes.push(s.distinctGenotypes);
-      if (this.graphs.topClone) this.graphs.topClone.push(s.topCloneShare);
-      if (this.graphs.lethal) this.graphs.lethal.push(s.meanAbsentRules);
+      this.samples.push({
+        tick: s.tick, population: s.population, density: s.density, meanEnergy: s.meanEnergy,
+        lethal: s.lethal, distinct: s.distinct, effective: s.effective, simpson: s.simpson,
+        topShare: s.topShare, topId: s.topId, births: s.births, deaths: s.deaths,
+      });
       if (typeof setStatus === 'function') {
-        setStatus('t=' + s.tick + '  pop=' + s.population + '  genotypes=' + s.distinctGenotypes +
-          '  top clone=' + (s.topCloneShare * 100).toFixed(1) + '%');
+        setStatus('t=' + s.tick + '  pop=' + s.population +
+          '  genotypes=' + s.distinct + ' (effective ' + s.effective.toFixed(1) + ')' +
+          '  top clone=' + (s.topShare * 100).toFixed(1) + '%');
       }
     }
     if (!this.flushed && engine.tick >= PARAMETERS.epoch) {
@@ -44,6 +47,7 @@ var DataManager = class DataManager {
     if (!this.db) return { ok: false };
     const pkt = this.db.packet(PARAMETERS, {
       run: this.run, samples: this.samples, final: this.world.stats(),
+      rngSeed: this.world.rngSeed,
     });
     try {
       const res = await this.db.insert(this.run, pkt);

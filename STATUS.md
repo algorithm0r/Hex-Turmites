@@ -6,18 +6,23 @@
 
 ## Stage
 DEVPLAN Stage 1b — The economy is not yet doing real work  `[ ACTIVE ]`
+(Stage 2, rule-space visualization, landed 2026-09-18)
 
 ## State
-Stage 1 done: the egocentric face model runs in-browser and headless. Spinner and walker
-demonstrators both verified. Smoke PASS (12 checks) @ 2026-09-18; browser-checked, no console
-errors, both draw modes render.
+Stages 1 and 2 done: the egocentric face model runs in-browser and headless, with a four-page
+stats panel (population / gene pool / genome-space atlas / lineages). Spinner and walker
+demonstrators verified. Smoke PASS (21 checks) @ 2026-09-18; browser-checked on all four
+pages, no console errors.
 
 ## Metrics
-- smoketest: 14/14 PASS, deterministic (10/10 repeat runs)
+- smoketest: 21/21 PASS, deterministic (10/10 repeat runs)
 - walker: 15 ticks → 2 cells alive, advanced exactly 15 hexes, births = deaths + 1
 - spinner: 6 ticks → 6/6 neighbours filled, 0 deaths
 - shipped defaults @ t=1000: median pop 6292, lethal slots ~0.1% (seeded 15%)
 - extinction risk: 0/60 seeds at initialSeeds=100 (was 1/60 at 40)
+- diversity @ t~3200: 680 distinct genotypes but effective (Hill N1) only 151, top clone 8%
+- genome space explored: ~2-3% of 117,649 after a few thousand ticks
+- draw cost: observer 3.6 ms/frame, heaviest panel page 2.6 ms, world.update 0.55 ms/tick
 
 ## Branches
 - `main`
