@@ -131,6 +131,11 @@ the sim runs.  ✓ the lethal-rule purge is visible as the grey band collapsing 
 ### Stage 2b — Visualization follow-ups  [ PLANNED ]
 - [ ] Genotype-colour contrast on the grid is washed out (the JL projection averages toward
       grey) — stretch it
+- [ ] The JL projection compresses distance: 1 differing slot to 6 is only a 2.38x colour-
+      distance change (sqrt(6) scaling), and 8.5% of 1-slot pairs look farther apart than
+      completely different pairs. Fine for spotting clones, useless for reading distance.
+      If distance needs to be legible, this wants a real embedding (MDS/UMAP on the 117,649
+      genomes, precomputed once) rather than a random projection.
 - [ ] Hex CA's raster orderings (sort-by-dead, frequency, spectral clustering) and the
       possessed/encountered condition split
 - [ ] Transition matrices over time

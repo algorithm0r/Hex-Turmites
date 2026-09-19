@@ -15,7 +15,7 @@ demonstrators verified. Smoke PASS (21 checks) @ 2026-09-18; browser-checked on 
 pages, no console errors.
 
 ## Metrics
-- smoketest: 21/21 PASS, deterministic (10/10 repeat runs)
+- smoketest: 28/28 PASS, deterministic (8/8 repeat runs)
 - walker: 15 ticks → 2 cells alive, advanced exactly 15 hexes, births = deaths + 1
 - spinner: 6 ticks → 6/6 neighbours filled, 0 deaths
 - shipped defaults @ t=1000: median pop 6292, lethal slots ~0.1% (seeded 15%)
@@ -28,6 +28,8 @@ pages, no console errors.
 - `main`
 
 ## Open
+- The new tab strip has not been seen in a real browser (Playwright MCP pinned to an
+  uninstalled Firefox build); click geometry is covered by the stub test, the look is not.
 - Runs are reproducible: `PARAMETERS.seed` pins the PRNG and the seed is saved in the packet.
 - Forks 1-3 settled (see DEVPLAN "Settled in Stage 1"); fork 3 (rotation cost) unswept.
 - The model saturates to density ~0.98 in every parameter regime tried — selection purges

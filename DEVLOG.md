@@ -3,6 +3,54 @@ Newest entry on top. **Append only — never edit past entries.**
 
 <!-- append new entries above this line -->
 
+## 2026-09-18 — tabs become a control; what the genotype colours actually mean
+**Done:** the stats panel's tab strip is now a real control. It was drawn to look like tabs but
+nothing hit-tested it — an affordance with no function. `Views._tabs` now records click targets,
+`Views.hitTestTab` resolves a canvas point to a page, and `main.js` routes canvas clicks and
+sets a pointer cursor over the strip. `Tab` / `Shift-Tab` cycle pages, keys `1`-`4` still jump
+directly, and the four page buttons are gone from the control panel. `BUTTON` joined the
+keydown exclusion list so Tab still moves focus normally through the remaining controls.
+
+**Measured — are genotype colours arbitrary or similarity-based?** Chris asked; the honest
+answer needed numbers rather than a reading of the code. Over 30,000 constructed pairs at each
+exact Hamming distance (n=2):
+
+| slots differing | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| mean colour distance | 1.371 | 1.907 | 2.327 | 2.671 | 2.988 | 3.269 |
+
+**Similarity-based, but only in one direction.** Monotone, so not arbitrary — but the ratio
+from 1 slot to all 6 is 2.38x, not 6x, which is the sqrt(6) = 2.45 random-walk scaling a random
+projection gives. The distributions overlap heavily: a 1-slot-different pair looks *farther*
+apart than a completely different pair **8.5%** of the time.
+
+So identical genomes are exactly the same colour (a clone is a uniform patch — the guarantee
+that matters) and near-identical genomes are near-identical colours, but distance is not
+readable off the picture. Recorded in `observer.js` next to the projection, in the README, and
+as a Stage 2b item: if distance has to be legible it wants a real embedding (MDS/UMAP over the
+117,649 genomes, precomputed once), not a random projection.
+
+Worth stating plainly because the two colour schemes in the app mean different things: the grid
+genotype view is similarity-based, while **page 4's lineage colours are an arbitrary hash of the
+genome id** and say nothing about similarity.
+
+Also checked: the genotype palette renormalises per frame from the living population, so a fixed
+genome's rendered colour drifts as the population changes — measured at 4-8 units out of a 200
+range over 4000 ticks, i.e. 2-4%. Visually negligible; left alone.
+
+**State:** `node smoketest.mjs` → PASS, 28 checks, 8/8 repeat runs. The tab strip is covered by
+the automated checks now: `views.js` is exercised through a stubbed 2D context, which verifies
+all four pages draw and that the centre of each tab resolves to its own page, that tabs do not
+overlap, and that the strip stays inside the panel. That stub immediately earned its keep by
+catching two missing context methods.
+
+**Not verified in a real browser this session.** The Playwright MCP is pinned to Firefox 1544
+and only 1543 and 1549 are installed, so it refused to launch; I did not download a browser onto
+the machine for a visual check. The click geometry is covered by the stub test above, but the
+*look* of the new tab strip is unconfirmed — worth ten seconds of Chris's eyes.
+
+**Next:** unchanged — Stage 1b, the saturating attractor.
+
 ## 2026-09-18 — Stage 2: visualizing the gene pool
 **Done:** a four-page stats panel (keys 1-4), all fed from a single genetics pass per
 reporting period. New `src/stats.js` (population genetics) and `src/views.js` (the pages);

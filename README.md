@@ -16,10 +16,10 @@ the shared engine v2.
 
 ## In the browser
 `S` seeds a spinner, `W` a walker, `R` returns to the evolving default. `G` toggles genotype
-colouring (clonal families share a hue, so a sweep is the field changing colour), `F` toggles
-the face markers.
+colouring, `F` toggles the face markers.
 
-Keys `1`-`4` switch the stats panel:
+Switch the stats panel by **clicking its tabs**, or with keys `1`-`4`, or `Tab` / `Shift-Tab`
+to cycle:
 1. **Population** — density, effective and distinct genotypes, top clone share, lethal slots.
 2. **Gene pool** — the allele table. For each condition, what fraction of the population
    carries each output, plus one stacked strip per condition over time. At n=2 this is the
@@ -29,6 +29,18 @@ Keys `1`-`4` switch the stats panel:
    band is the organism's rule when it is c0 facing empty, the column band when it is c1.
 4. **Lineages** — a Muller-style stack of every genotype that ever held share, each with its
    rule table spelled out.
+
+### What the two colour schemes mean
+They are different on purpose:
+- **Genotype view on the grid (`G`)** — *similarity-based*. A genome is projected into RGB by
+  summing a fixed random vector per (condition, output). Identical genomes get exactly the same
+  colour, so a clone is a uniform patch, and near-identical genomes get near-identical colours.
+  But the projection compresses distance: going from 1 differing slot to all 6 only multiplies
+  colour distance by 2.38x (the sqrt(6) random-walk scaling), and a 1-slot pair looks farther
+  apart than a completely different pair 8.5% of the time. **Trust it for "these cells are the
+  same clone", not for reading distance.**
+- **Lineage colours on page 4** — *arbitrary*. A hash of the genome id. Stable per genotype, but
+  it says nothing about similarity. Use the id and the printed rule table to confirm identity.
 
 **Read the diversity number carefully.** "Distinct genotypes" counts singletons, so it runs
 far ahead of how diverse the population actually is; the effective number (Hill N1,

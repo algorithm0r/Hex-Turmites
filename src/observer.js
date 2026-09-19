@@ -76,10 +76,26 @@ var Observer = class Observer {
   }
 
   // ─── genotype view ──────────────────────────────────────────────────────────
-  // Johnson–Lindenstrauss style: each (condition, output) pair gets a fixed random 3-vector
-  // and a genome is the sum of its slots' vectors. Similar genomes land on similar colours,
-  // so a clone is a patch of one hue and a sweep is the field changing colour. The vectors
-  // come from a seeded PRNG so the colours mean the same thing from run to run.
+  // Johnson-Lindenstrauss style: each (condition, output) pair gets a fixed random 3-vector
+  // and a genome is the sum of its slots' vectors. The vectors come from a seeded PRNG, so the
+  // colours mean the same thing from run to run.
+  //
+  // COLOURS ARE SIMILARITY-BASED, BUT ONLY IN ONE DIRECTION. Measured over constructed pairs
+  // at each exact Hamming distance (n=2, 30k pairs per bucket):
+  //
+  //     slots differing   1      2      3      4      5      6
+  //     mean colour dist  1.37   1.91   2.33   2.67   2.99   3.27
+  //
+  // Monotone, so it is not arbitrary. But the ratio from 1 slot to all 6 is only 2.38x, not
+  // 6x — that is the sqrt(6) = 2.45 random-walk scaling a random projection gives, and the
+  // distributions overlap heavily: a 1-slot pair looks FARTHER apart than a totally different
+  // pair 8.5% of the time.
+  //
+  // So: identical genomes are exactly the same colour (a clone is a uniform patch, which is
+  // the guarantee that matters), and near-identical genomes are near-identical colours. But
+  // do NOT read distance off the picture — two similar colours need not be similar genomes.
+  // Page 4 (Lineages) is the place to confirm identity; its colours are a hash of the genome
+  // id, deliberately arbitrary, and mean nothing about similarity.
   _ensureProjection(n, ncond) {
     if (this._projN === n && this._projection) return;
     let s = 0x9e3779b9;

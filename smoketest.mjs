@@ -207,5 +207,71 @@ console.log('genome identity and diversity');
         'effective=' + r2.effective.toFixed(6) + ' pop=' + r2.population);
 }
 
+// ─── 6. The stats tabs are a control, not a picture of one ───────────────────────────────
+// views.js is browser-only, so it gets a stubbed 2D context. Worth the stub: the tab strip is
+// drawn by the same code that hit-tests it, and a drift between the two is invisible until
+// someone clicks and nothing happens.
+console.log('stats tabs');
+{
+  const noop = () => {};
+  const ctx = {
+    canvas: { width: 1704, height: 984 },
+    save: noop, restore: noop, beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop,
+    stroke: noop, fill: noop, fillRect: noop, strokeRect: noop, fillText: noop,
+    drawImage: noop, putImageData: noop, translate: noop, rotate: noop, scale: noop,
+    clearRect: noop, arc: noop, rect: noop, setTransform: noop,
+    measureText: (t) => ({ width: String(t).length * 5 }),
+    createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+    fillStyle: '', strokeStyle: '', font: '', lineWidth: 1, globalAlpha: 1,
+    textBaseline: '', imageSmoothingEnabled: true,
+  };
+  globalThis.document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
+
+  const viewsSrc = readFileSync(path.join(__dirname, 'src', 'views.js'), 'utf8')
+    .replace(/^\s*(['"])use strict\1;?/, '');
+  indirectEval(viewsSrc);
+  const { Views, Stats } = globalThis;
+
+  Object.assign(P, DEFAULTS, { seed: 5150 });
+  globalThis.PANEL_W = P.panelWidth;
+  const bw = Math.ceil(P.gridCols * P.cellSize * 1.5 + P.cellSize * 2);
+  globalThis.boardWidth = () => bw;
+
+  const w = new World();
+  const st = new Stats(w);
+  run(w, 200);
+  st.sample(200);
+  const views = new Views(w, st);
+
+  let allPagesDrew = true, drawErr = '';
+  for (let pg = 0; pg < 4; pg++) {
+    P.statsPage = pg;
+    try { views.draw(ctx); } catch (e) { allPagesDrew = false; drawErr = 'page ' + pg + ': ' + e.message; }
+  }
+  check('all four pages draw without throwing', allPagesDrew, drawErr);
+  check('the tab strip registered 4 click targets', views._tabRects.length === 4,
+        'n=' + views._tabRects.length);
+
+  // the centre of tab i must hit page i
+  let hits = true, detail = '';
+  for (const t of views._tabRects) {
+    const got = views.hitTestTab(t.x + t.w / 2, t.y + t.h / 2);
+    if (got !== t.page) { hits = false; detail = 'tab ' + t.page + ' -> ' + got; }
+  }
+  check('clicking each tab selects its own page', hits, detail);
+  check('a click on the board misses every tab', views.hitTestTab(10, 500) === -1);
+  check('a click below the strip misses every tab',
+        views.hitTestTab(views._tabRects[0].x + 4, views._tabRects[0].y + 60) === -1);
+
+  // tabs must not overlap, and must stay inside the panel
+  const sorted = [...views._tabRects].sort((a, b) => a.x - b.x);
+  let disjoint = true;
+  for (let i = 1; i < sorted.length; i++) if (sorted[i].x < sorted[i - 1].x + sorted[i - 1].w) disjoint = false;
+  check('tabs do not overlap', disjoint);
+  const last = sorted[sorted.length - 1];
+  check('tab strip stays inside the panel', last.x + last.w <= bw + P.panelWidth,
+        'right edge ' + Math.round(last.x + last.w) + ' <= ' + (bw + P.panelWidth));
+}
+
 console.log('smoke: ' + (failures === 0 ? 'PASS' : 'FAIL (' + failures + ')'));
 process.exit(failures === 0 ? 0 : 1);

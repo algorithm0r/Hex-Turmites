@@ -54,6 +54,16 @@ var Views = class Views {
     this.palette = outputPalette(world.n);
     this._atlasImage = null;
     this._scratch = null;
+    this._tabRects = [];        // filled by _tabs each draw; read by hitTestTab
+  }
+
+  // Which tab (if any) is at canvas point (px, py)? -1 for none. main.js routes clicks here
+  // so the tab strip is the control, rather than a picture of one.
+  hitTestTab(px, py) {
+    for (const t of this._tabRects) {
+      if (px >= t.x && px <= t.x + t.w && py >= t.y && py <= t.y + t.h) return t.page;
+    }
+    return -1;
   }
 
   update() {}
@@ -66,26 +76,39 @@ var Views = class Views {
     ctx.fillStyle = '#0b0e13';
     ctx.fillRect(boardWidth(), 0, PANEL_W, ctx.canvas.height);
     const page = PARAMETERS.statsPage | 0;
-    this._tabs(ctx, x0, 10, page);
-    if (page === 1) this._genePool(ctx, x0, 34, w);
-    else if (page === 2) this._atlas(ctx, x0, 34, w);
-    else if (page === 3) this._lineages(ctx, x0, 34, w);
-    else this._population(ctx, x0, 34, w);
+    this._tabs(ctx, x0, 10, w, page);
+    if (page === 1) this._genePool(ctx, x0, 40, w);
+    else if (page === 2) this._atlas(ctx, x0, 40, w);
+    else if (page === 3) this._lineages(ctx, x0, 40, w);
+    else this._population(ctx, x0, 40, w);
     ctx.restore();
   }
 
-  _tabs(ctx, x, y, page) {
-    const names = ['1 Population', '2 Gene pool', '3 Atlas', '4 Lineages'];
+  // A real tab strip: evenly divided across the panel, click targets recorded for hit-testing,
+  // and the active tab joined to the page below it by leaving its bottom edge open.
+  _tabs(ctx, x, y, w, page) {
+    const names = ['Population', 'Gene pool', 'Atlas', 'Lineages'];
+    const h = 20;
+    const tw = w / names.length;
+    this._tabRects = [];
     ctx.font = '10px system-ui, sans-serif';
-    let cx = x;
+    ctx.textBaseline = 'alphabetic';
     for (let i = 0; i < names.length; i++) {
-      const tw = ctx.measureText(names[i]).width + 10;
-      ctx.fillStyle = i === page ? '#2b6cf6' : '#1a1f29';
-      ctx.fillRect(cx, y, tw, 16);
-      ctx.fillStyle = i === page ? '#ffffff' : '#79808c';
-      ctx.fillText(names[i], cx + 5, y + 11.5);
-      cx += tw + 4;
+      const cx = x + i * tw;
+      const active = i === page;
+      ctx.fillStyle = active ? '#2b6cf6' : '#161b23';
+      ctx.fillRect(cx, y, tw - 2, h);
+      ctx.fillStyle = active ? '#ffffff' : '#79808c';
+      const label = (i + 1) + '  ' + names[i];
+      ctx.fillText(label, cx + (tw - 2 - ctx.measureText(label).width) / 2, y + 13.5);
+      this._tabRects.push({ x: cx, y: y, w: tw - 2, h: h, page: i });
     }
+    // the rule under the strip, broken where the active tab sits
+    ctx.strokeStyle = '#2b6cf6';
+    ctx.beginPath();
+    ctx.moveTo(x, y + h + 0.5);
+    ctx.lineTo(x + w, y + h + 0.5);
+    ctx.stroke();
   }
 
   _title(ctx, x, y, text, sub) {

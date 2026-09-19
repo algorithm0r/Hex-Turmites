@@ -63,10 +63,41 @@ function toggleGenotypeView() {
 function toggleFaces() { PARAMETERS.showFaces = !PARAMETERS.showFaces; }
 function setStatsPage(i) { PARAMETERS.statsPage = i; }
 
+// Canvas point for a mouse event, corrected for any CSS scaling of the canvas element.
+function canvasPoint(canvas, ev) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: (ev.clientX - r.left) * (canvas.width / r.width),
+    y: (ev.clientY - r.top) * (canvas.height / r.height),
+  };
+}
+
+function wireTabs(canvas) {
+  canvas.addEventListener('click', function (ev) {
+    if (!views) return;
+    const p = canvasPoint(canvas, ev);
+    const tab = views.hitTestTab(p.x, p.y);
+    if (tab >= 0) { setStatsPage(tab); gameEngine.draw(); }
+  });
+  // pointer feedback, so the strip reads as clickable
+  canvas.addEventListener('mousemove', function (ev) {
+    if (!views) return;
+    const p = canvasPoint(canvas, ev);
+    canvas.style.cursor = views.hitTestTab(p.x, p.y) >= 0 ? 'pointer' : 'default';
+  });
+}
+
 window.addEventListener('keydown', function (e) {
   const t = e.target.tagName;
-  if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
+  // BUTTON included so Tab still moves focus normally through the control panel; the page
+  // cycle only fires when focus is not on a control.
+  if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA' || t === 'BUTTON') return;
   const k = e.key.toLowerCase();
+  if (e.key === 'Tab') {                       // Tab / Shift-Tab cycles the pages
+    e.preventDefault();
+    setStatsPage((PARAMETERS.statsPage + (e.shiftKey ? 3 : 1)) % 4);
+    return;
+  }
   if (k >= '1' && k <= '4') setStatsPage(parseInt(k, 10) - 1);
   else if (k === 'g') toggleGenotypeView();
   else if (k === 'f') toggleFaces();
@@ -80,6 +111,7 @@ window.onload = function () {
   gameEngine = new GameEngine();
   gameEngine.init(canvas.getContext('2d'));
   buildControls();
+  wireTabs(canvas);
   reset();
   gameEngine.start();
 };
