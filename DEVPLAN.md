@@ -78,9 +78,12 @@ machinery is agnostic to what a condition *is*, so it transfers directly.
 - **Stage 1 complete.** The face model runs in-browser and headless: hex geometry with
   orientation, the `(self, faced)` genome, sense→recolour→rotate→reproduce-forward, mutation
   on copy, rule-absence death. Both demonstrator organisms verified by `smoketest.mjs`.
+- **Stage 2 complete** (four-page stats panel, genome-space atlas).
+- Live on GitHub Pages (https://algorithm0r.github.io/Hex-Turmites/, from `main`), with DB
+  writes disabled on that host. Browser speed has Speed (fast-forward) and Slow-mo controls.
 
 ## Not yet built
-- Stages 2-4 below.
+- Stages 1b, 2b, 3 and 4 below.
 
 ## Settled in Stage 1
 - **Fork 1 — child orientation:** `inherit`, and specifically the BIRTH DIRECTION (the

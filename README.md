@@ -6,6 +6,8 @@ A browser-based agent-based simulation (vanilla JS + Canvas, no build step), sca
 the shared engine v2.
 
 ## Run
+- **Live:** <https://algorithm0r.github.io/Hex-Turmites/> (GitHub Pages, served from `main`).
+  The Pages copy never writes run packets to the database; a local copy does, at epoch.
 - **Browser:** open `index.html`.
 - **Headless batch:** `node runner.mjs --reps 50` — runs the same sim core in the main V8 realm
   (indirect `eval`, not `vm` — avoids vm's hot-loop tax; see `~/.claude/conventions.md` §4) and
@@ -16,7 +18,9 @@ the shared engine v2.
 
 ## In the browser
 `S` seeds a spinner, `W` a walker, `R` returns to the evolving default. `G` toggles genotype
-colouring, `F` toggles the face markers.
+colouring, `F` toggles the face markers. **Speed** runs up to 100 ticks per frame; **Slow-mo**
+goes the other way, one tick every N frames (60 is about one tick a second), and overrides
+Speed while it is above 1.
 
 Switch the stats panel by **clicking its tabs**, or with keys `1`-`4`, or `Tab` / `Shift-Tab`
 to cycle:

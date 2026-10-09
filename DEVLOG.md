@@ -3,6 +3,34 @@ Newest entry on top. **Append only — never edit past entries.**
 
 <!-- append new entries above this line -->
 
+## 2026-10-09 — slow-mo control; the sim goes public on GitHub Pages
+**Done:** a **Slow-mo** slider (`framesPerUpdate`, 1-60) beside Speed. Above 1 the browser loop
+runs ONE update every N frames and ignores `updatesPerDraw`, so 60 is ~1 tick/sec, slow enough
+to watch a single organism recolour, turn and reproduce. It still draws every frame, so the UI
+stays responsive while the sim crawls. Browser-only; the headless runner never reads it.
+
+The repo now has a remote, `algorithm0r/Hex-Turmites` (public), with GitHub Pages serving
+`main` at https://algorithm0r.github.io/Hex-Turmites/. Before publishing, one guard: the browser
+auto-flushes a packet to the research Server at epoch, so a public copy would let any visitor's
+run land in `hexturmitesDB` beside real data. `main.js` now sets `db = null` on `*.github.io`
+(`DataManager.flush()` already no-ops on a null db). Same issue Plant-World's DEVLOG flagged.
+The Server address was already in seven public repos (checked with `gh search code`), so
+publishing it here exposes nothing new.
+
+**Changed:** `src/engine.js` (frame counter in `start()`), `src/params.js` (`framesPerUpdate`
++ schema entry), `src/main.js` (Pages DB guard), README and CLAUDE.md Run sections (live URL, the
+guard, what Slow-mo does).
+
+**State:** `node smoketest.mjs` → PASS, 28 checks @ b98a57d. Loop checked headlessly with a
+stubbed `requestAnimationFrame` over 60 frames: Speed 4 → 240 ticks, Slow-mo 30 → 2, Slow-mo 60 → 1.
+**Live Pages site checked in the built-in browser** (Pages status `built`, HTTP 200): Slow-mo
+slider present, `db === null` on that host, no console errors, and ticks = frames / N (9/9, 5/9,
+2/9 at N = 1, 2, 4; the pane was throttled to ~3 fps, so absolute rates are low). The stats
+panel was off-screen in that narrow pane, so the tab strip's look is **still unseen**.
+Playwright MCP failed to launch Firefox again (180 s timeout).
+
+**Next:** unchanged — Stage 1b, the saturating attractor.
+
 ## 2026-09-18 — tabs become a control; what the genotype colours actually mean
 **Done:** the stats panel's tab strip is now a real control. It was drawn to look like tabs but
 nothing hit-tested it — an affordance with no function. `Views._tabs` now records click targets,

@@ -51,6 +51,8 @@ tokens and a `**Done when:**` criterion. `/log-session` rewrites STATUS — don'
 `Verified:` line (that moves only on a cold `/audit`).
 
 ## Run
-- Browser: open `index.html`.
+- Browser: open `index.html`. Live copy: https://algorithm0r.github.io/Hex-Turmites/ — GitHub
+  Pages from `main` (repo `algorithm0r/Hex-Turmites`, public), so every push to `main` redeploys.
+  `main.js` nulls the DB client on `*.github.io` so public visitors never write run packets.
 - Headless batch: `node runner.mjs --reps N` (writes to MongoDB via the Server).
 - Smoke (no DB): `node smoketest.mjs` — prints the numbers that go in the DEVLOG entry.
