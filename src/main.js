@@ -26,7 +26,9 @@ function reset() {
   world = new World();
   stats = new Stats(world);
   views = new Views(world, stats);
-  db = createDB(PARAMETERS.db);
+  // The public GitHub Pages copy never writes: a visitor's run reaching epoch would otherwise
+  // be filed into the research DB beside real data. DataManager.flush() no-ops on a null db.
+  db = /\.github\.io$/.test(location.hostname) ? null : createDB(PARAMETERS.db);
   dataManager = new DataManager(world, db, stats);
   gameEngine.add(world);
   gameEngine.add(new Observer(world));

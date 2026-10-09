@@ -53,6 +53,8 @@ var PARAMETERS = {
 
   // --- engine ---
   updatesPerDraw: 4,     // sim updates per rendered frame
+  framesPerUpdate: 1,    // slow-mo: above 1, ONE update every N frames (updatesPerDraw is
+                         // ignored), so 60 is ~1 tick/sec. Browser-only; headless ignores it.
 
   // --- data collection ---
   reportingPeriod: 25,   // sample metrics every N ticks
@@ -78,5 +80,6 @@ var PARAM_SCHEMA = [
   { key: 'rotationCost', label: 'Rotation cost', min: 0, max: 5, step: 0.5 },
   { key: 'pDeath', label: 'Random death', min: 0, max: 0.05, step: 0.001 },
   { key: 'updatesPerDraw', label: 'Speed', min: 1, max: 100, step: 1 },
+  { key: 'framesPerUpdate', label: 'Slow-mo', min: 1, max: 60, step: 1 },
   { key: 'cellSize', label: 'Cell size', min: 3, max: 20, step: 1, refits: true },
 ];

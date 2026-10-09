@@ -20,12 +20,17 @@ var GameEngine = class GameEngine {
   add(entity) { this.entities.push(entity); }
   clear() { this.entities = []; this.tick = 0; }
 
-  // browser entry — render-locked loop with fast-forward
+  // browser entry — render-locked loop with fast-forward (updatesPerDraw) and slow-mo
+  // (framesPerUpdate: one update every N frames). Draws every frame either way, so the
+  // view stays responsive to UI changes while the sim is crawling.
   start() {
     this.running = true;
+    let frame = 0;
     const loop = () => {
       if (!this.running) return;
-      for (let i = 0; i < PARAMETERS.updatesPerDraw; i++) this.update();
+      const slow = PARAMETERS.framesPerUpdate || 1;
+      if (slow > 1) { if (++frame >= slow) { frame = 0; this.update(); } }
+      else for (let i = 0; i < PARAMETERS.updatesPerDraw; i++) this.update();
       this.draw();
       requestAnimationFrame(loop);
     };
