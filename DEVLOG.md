@@ -3,6 +3,80 @@ Newest entry on top. **Append only — never edit past entries.**
 
 <!-- append new entries above this line -->
 
+## 2026-10-16 — movement toggle; energy from neighbour colours (mismatch is the new default)
+*(Work done 2026-10-11, logged 2026-10-16.)*
+
+**Done:** two model changes, both chosen by Chris where the design forked.
+
+*Movement* (`movement`, off by default; checkbox or `M`). Every rule output gains a move bit:
+`code = move*3n + colour*3 + rot`, so with movement off every code and id is the Stage 1 one.
+A rule with the bit set, firing while the faced cell is empty, steps the organism into it
+(paying `moveCost`, default 0) and, if it can then afford `reproCost`, leaves a child in the
+cell it vacated. Facing anything alive, the move is blocked. Chris chose per-rule over
+per-genome, and child-left-behind over "a move uses the cell, so no birth that tick".
+n=2 grows from 7^6 to 13^6 = 4,826,809 genomes; the atlas keeps 343x343 by indexing on
+`skeletonId` (move bits dropped, 64 genomes per pixel); the gene-pool table widens to 6x13.
+New `crawlerGenome` demo (`C`): flip colour, never turn, always move.
+**The move bit is neutral in 4 of the 6 n=2 conditions** (faced cell alive → move always
+blocked), so with movement on 16 genome ids share each phenotype and distinct/effective counts
+include drift in those bits. Not comparable across the toggle without saying so.
+
+*Energy source* (`energyRule`, dropdown). `'mismatch'` (default, Chris's preference): one unit
+per neighbour whose colour differs from the organism's, counted after its rule recolours it.
+`'match'`: per same-colour neighbour. `'change'`: the Stage 1 rule. `emptyIsMismatch` (off)
+decides whether empty cells pay under mismatch; Chris asked for it as a parameter. A lone
+organism earns nothing under the neighbour rules, so random founders start with
+`founderChildren x reproCost` energy (default 1 child). That is in children rather than raw
+energy because a fixed 20 made every run go extinct the moment reproCost was raised to 60.
+The spinner/walker/crawler demos force `'change'`.
+
+**Measured** (4-6 seeds, scratch scripts, not committed). Unlike-neighbour fraction among
+living adjacent pairs, where 0.5 is colour-blind at n=2:
+
+| energy rule | density @1500 | effective N1 | mean energy | unlike-neighbour |
+|---|---|---|---|---|
+| change | 0.954 | 89.1 | 33 | 0.431 |
+| mismatch, living only | 0.988 | 135.2 | 236 | 0.423 |
+| mismatch, empty pays | 0.989 | 305.8 | 209 | 0.370 |
+| match | 0.990 | 258.7 | 460 | 0.169 |
+
+- **Mismatch does not produce mixing**: 0.42, the same as `'change'`, while `'match'` clumps
+  hard. Unexplained. A guess, untested: children are born the parent's colour, so kin sit
+  together.
+- **It does not fix saturation.** Energy is hoarded (~230 vs a cost of 20), so energy does not
+  limit reproduction. A reproCost sweep at 25-50 (founders funded to match) looked
+  non-saturating at t=500-1000 (densities 0.03-0.4), but **every surviving run reached
+  0.91-0.99 by t=3000**. Higher cost only delays filling, and from 40 up 1-3 of 6 founding
+  populations die out.
+
+**Changed:** `genome.js` (move-bit encoding, `outMoves`/`outLabel`/`skeletonId`/
+`crawlerGenome`; `outColor` now takes n), `world.js` (move step, `_birth` helper, neighbour
+table, neighbour energy, founder funding, `moves` counters), `stats.js` (atlas on skeleton
+ids, `moves` per sample), `views.js` (13-slot palette and labels, skeleton atlas title,
+moves sparkline), `observer.js` (projection re-keyed on slot count), `ui.js` (checkbox and
+dropdown controls), `params.js`, `main.js` (`M`, `C`, demos force `'change'`),
+`datamanager.js` (packets carry `moves`), `index.html` (control CSS), `.claude/launch.json`
+(new: python static server on 8231, for the in-app browser). CLAUDE.md invariants rewritten
+for energy and movement; README, DEVPLAN updated.
+
+**State:** `node smoketest.mjs` → PASS, **51 checks** @ ac86213 (the code commit; re-run
+there after committing), output identical across 3 repeat runs. New checks pin the crawler
+(15 cells in 15 ticks, child in the vacated cell, blocked move), the 13^6 id bijection
+(every 7th id), skeleton = Stage 1 id, and the exact income of each energy rule for a fixed
+neighbourhood (2 / 5 / 1 / 1 / 0). **`'change'` + `founderChildren: 0` reproduces the
+committed shipped-defaults numbers exactly** (seed 606: pop 8335, births 42705, deaths 34470),
+and movement off was bit-identical before the energy change. Shipped defaults now:
+t=1000 density 0.986, mean energy 229. Checked in the in-app browser (local server): toggle,
+dropdown, `M`/`C`/`S` keys work, no console errors; the 13-column gene pool renders; the
+stats tab strip seen at full width for the first time and looks right. The atlas page drew
+without error but its screenshot came back stale (hidden pane), so its look is unchecked.
+Live Pages site does not have these changes until pushed.
+
+**Next:** Stage 1b — the saturating attractor. Neither movement nor neighbour income broke it.
+The cheap next probes are a per-tick metabolism or an energy cap (income is not limiting), and
+testing the kin-colour guess for why mismatch doesn't mix (e.g. `childOrientation`/child
+colour variants).
+
 ## 2026-10-09 — slow-mo control; the sim goes public on GitHub Pages
 **Done:** a **Slow-mo** slider (`framesPerUpdate`, 1-60) beside Speed. Above 1 the browser loop
 runs ONE update every N frames and ignores `updatesPerDraw`, so 60 is ~1 tick/sec, slow enough
