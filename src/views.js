@@ -5,28 +5,32 @@
 //
 //   1 POPULATION — density, diversity, dominance, lethality over time
 //   2 GENE POOL  — the allele table: for each condition, who carries which output. At n=2
-//                  this is the COMPLETE state of the gene pool, 6x7, not a summary of it.
+//                  this is the COMPLETE state of the gene pool, 6x7 (6x13 with movement),
+//                  not a summary of it.
 //   3 ATLAS      — every POSSIBLE genome as one pixel, 343x343, lit by occupancy. This view
-//                  exists only because 7^6 = 343^2; it is the n=2 privilege made visible.
+//                  exists only because 7^6 = 343^2; it is the n=2 privilege made visible. With
+//                  movement on, a pixel is a move-free skeleton pooling 64 genomes.
 //   4 LINEAGES   — a Muller-style stack of the genotypes that ever held share, with their
 //                  rule tables spelled out.
 
 // Colour for one output slot: absent is grey, otherwise the colour it paints, shaded by which
-// way it turns. Hue says "what colour", shade says "which rotation".
-function outputPalette(n) {
+// way it turns. Hue says "what colour", shade says "which rotation". Moving outputs (slots
+// after the first 3n) reuse the pattern with the hue rotated half a step, so a mover reads
+// as a neighbour of its stationary twin rather than as a new colour.
+function outputPalette(n, movement) {
   const out = ['#39404d'];                       // slot 0 = RULE_ABSENT = death
   const lightness = [42, 58, 74];                // L, none, R
-  for (let c = 0; c < n; c++) {
-    const hue = Math.round(c * 360 / n);
-    for (let r = 0; r < 3; r++) out.push('hsl(' + hue + ',72%,' + lightness[r] + '%)');
+  for (let m = 0; m < (movement ? 2 : 1); m++) {
+    for (let c = 0; c < n; c++) {
+      const hue = Math.round((c + m / 2) * 360 / n);
+      for (let r = 0; r < 3; r++) out.push('hsl(' + hue + ',72%,' + lightness[r] + '%)');
+    }
   }
   return out;
 }
 
-function outputLabel(slot) {
-  if (slot === 0) return 'die';
-  const code = slot - 1;
-  return 'c' + ((code / 3) | 0) + ['L', '-', 'R'][code % 3];
+function outputLabel(slot, n) {
+  return slot === 0 ? 'die' : outLabel(slot - 1, n);
 }
 
 function conditionLabel(q, n) {
@@ -51,7 +55,7 @@ var Views = class Views {
   constructor(world, stats) {
     this.world = world;
     this.stats = stats;
-    this.palette = outputPalette(world.n);
+    this.palette = outputPalette(world.n, world.movement);
     this._atlasImage = null;
     this._scratch = null;
     this._tabRects = [];        // filled by _tabs each draw; read by hitTestTab
@@ -134,6 +138,13 @@ var Views = class Views {
       ['top clone share', (r) => r.topShare, '#e08a8a', 1, (v) => (v * 100).toFixed(1) + '%'],
       ['lethal genome slots', (r) => r.lethal || 0, '#b98ae0', 1, (v) => (v * 100).toFixed(2) + '%'],
     ];
+    // Moves per organism per tick over the last period: how much of the population's activity
+    // is stepping rather than staying put.
+    if (this.world.movement) {
+      const per = PARAMETERS.reportingPeriod;
+      series.push(['moves per organism-tick', (r) => (r.population ? (r.moves || 0) / r.population / per : 0),
+        '#6fd6c4', null, (v) => v.toFixed(3)]);
+    }
     let yy = y + 6;
     for (const s of series) {
       this._spark(ctx, x, yy, w, 58, h, s[0], s[1], s[2], s[3], s[4]);
@@ -178,7 +189,7 @@ var Views = class Views {
     ctx.font = '9px system-ui, sans-serif';
     for (let s = 0; s < nslot; s++) {
       ctx.fillStyle = '#79808c';
-      const lbl = outputLabel(s);
+      const lbl = outputLabel(s, n);
       ctx.fillText(lbl, x + labelW + s * cw + (cw - ctx.measureText(lbl).width) / 2, top - 5);
     }
     for (let q = 0; q < ncond; q++) {
@@ -250,9 +261,16 @@ var Views = class Views {
     }
     const side = st.atlasSide;
     const ex = st.explored();
-    this._title(ctx, x, y + 10,
-      'Atlas — all ' + st.spaceSize.toLocaleString('en-US') + ' possible organisms',
-      'one pixel per genome.  bright = alive now,  dim blue = visited earlier.');
+    if (st.movement) {
+      this._title(ctx, x, y + 10,
+        'Atlas — ' + st.atlasSize.toLocaleString('en-US') + ' move-free skeletons',
+        'movement on: one pixel per rule table with move bits dropped, pooling ' +
+        Math.round(st.spaceSize / st.atlasSize) + ' genomes.');
+    } else {
+      this._title(ctx, x, y + 10,
+        'Atlas — all ' + st.spaceSize.toLocaleString('en-US') + ' possible organisms',
+        'one pixel per genome.  bright = alive now,  dim blue = visited earlier.');
+    }
     ctx.fillStyle = '#6f757f';
     ctx.font = '9px system-ui, sans-serif';
     ctx.fillText('explored ' + ex.seen.toLocaleString('en-US') + ' of ' +
@@ -310,7 +328,7 @@ var Views = class Views {
     ctx.font = '8px system-ui, sans-serif';
     ctx.fillStyle = '#79808c';
     for (let k = 0; k < 7; k++) {
-      const lbl = outputLabel(k);
+      const lbl = outputLabel(k, st.n);
       ctx.fillText(lbl, ax + k * block + (block - ctx.measureText(lbl).width) / 2, ay - 4);
       ctx.save();
       ctx.translate(ax - 5, ay + k * block + block / 2 + ctx.measureText(lbl).width / 2);
@@ -381,13 +399,14 @@ var Views = class Views {
   }
 
   // "c1R c1R c1R  |  c0R c0R c0R" — outputs in condition order, grouped by self colour.
+  // A trailing 'm' marks a rule that moves.
   _compactGenome(g, n) {
     const parts = [];
     for (let self = 0; self < n; self++) {
       const row = [];
       for (let f = -1; f < n; f++) {
         const code = g[condIndex(self, f, n)];
-        row.push(code === RULE_ABSENT ? 'die' : 'c' + outColor(code) + ['L', '-', 'R'][outRot(code)]);
+        row.push(code === RULE_ABSENT ? 'die' : outLabel(code, n));
       }
       parts.push(row.join(' '));
     }

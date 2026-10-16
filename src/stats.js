@@ -8,8 +8,8 @@
 //                    where one clone holds 90% is not a diverse population, and the raw count
 //                    says it is.
 //   2. ALLELES     — for each condition, what fraction of the population carries each output.
-//                    At n=2 this is a 6x7 table and it is the COMPLETE state of the gene pool,
-//                    not a summary of it.
+//                    At n=2 this is a 6x7 table (6x13 with movement) and it is the COMPLETE
+//                    state of the gene pool, not a summary of it.
 //   3. GENOTYPES   — counts per whole-genome id, for the lineage (Muller) view and the atlas.
 var Stats = class Stats {
   constructor(world) {
@@ -24,17 +24,21 @@ var Stats = class Stats {
     this.counts = new Map();                                     // genotype id -> living count
     this.history = [];                                           // one record per sample
     this.spaceSize = this.exactIds ? genomeSpaceSize(n) : Infinity;
+    this.movement = world.movement;
 
-    // The atlas: one slot per POSSIBLE genome. Only built when the space is small enough to
-    // hold in memory — that is the n=2 privilege and the reason n=2 is the primary config.
+    // The atlas: one slot per POSSIBLE genome skeleton (the rule table with move bits dropped,
+    // see skeletonId). Only built when that space is small enough to hold in memory — the n=2
+    // privilege and the reason n=2 is the primary config. With movement off a skeleton IS a
+    // genome; with it on, each atlas cell pools the 2^ncond genomes that differ only in moves.
+    this.atlasSize = Math.pow(3 * n + 1, this.ncond);
     this.atlasSide = 0;
     this.occupancy = null;
     this.everOccupied = null;
-    if (this.exactIds && this.spaceSize <= (1 << 21)) {
-      this.atlasSide = Math.round(Math.sqrt(this.spaceSize));
-      if (this.atlasSide * this.atlasSide === this.spaceSize) {   // 117649 = 343^2 exactly
-        this.occupancy = new Float32Array(this.spaceSize);
-        this.everOccupied = new Uint8Array(this.spaceSize);
+    if (this.atlasSize <= (1 << 21)) {
+      this.atlasSide = Math.round(Math.sqrt(this.atlasSize));
+      if (this.atlasSide * this.atlasSide === this.atlasSize) {   // 117649 = 343^2 exactly
+        this.occupancy = new Float32Array(this.atlasSize);
+        this.everOccupied = new Uint8Array(this.atlasSize);
       } else {
         this.atlasSide = 0;
       }
@@ -63,7 +67,10 @@ var Stats = class Stats {
       const id = this.exactIds ? genomeId(w.genome, base, ncond, this.n)
                                : genomeKey(w.genome, base, ncond);
       counts.set(id, (counts.get(id) || 0) + 1);
-      if (this.occupancy) { this.occupancy[id]++; this.everOccupied[id] = 1; }
+      if (this.occupancy) {
+        const a = this.movement ? skeletonId(w.genome, base, ncond, this.n) : id;
+        this.occupancy[a]++; this.everOccupied[a] = 1;
+      }
     }
     if (pop) for (let k = 0; k < alleles.length; k++) alleles[k] /= pop;
 
@@ -86,6 +93,7 @@ var Stats = class Stats {
       lethal: pop ? lethalSlots / pop / ncond : 0,   // fraction of genome slots that kill
       births: w.birthsThisPeriod,
       deaths: w.deathsThisPeriod,
+      moves: w.movesThisPeriod,
       distinct: counts.size,
       effective: pop ? Math.exp(H) : 0,        // Hill N1
       simpson: pop ? 1 / simpson : 0,          // Hill N2 (inverse Simpson)
@@ -118,6 +126,6 @@ var Stats = class Stats {
     if (!this.everOccupied) return null;
     let seen = 0;
     for (let i = 0; i < this.everOccupied.length; i++) seen += this.everOccupied[i];
-    return { seen, total: this.spaceSize, frac: seen / this.spaceSize };
+    return { seen, total: this.atlasSize, frac: seen / this.atlasSize };
   }
 };

@@ -33,15 +33,30 @@ Turmites with heredity on a hex grid: each organism is a 2D Turing machine with 
   see it" work, and it is what `smoketest.mjs` pins.
 - **A newborn does not act on the tick it was born** (`bornTick` guard), or a lineage runs
   ahead of the clock inside one update.
-- **Energy is earned on colour CHANGE.** An organism that never recolours never earns and so
-  can never reproduce — that is why both demonstrator genomes flip colour every tick.
-- `reproCost` is calibrated against income (~1/tick), not genome size. At 1 the economy
-  constrains nothing.
+- **Energy is earned per neighbour whose colour DIFFERS from the organism's** (`energyRule:
+  'mismatch'`, the default since 2026-10-11), counted after its rule recolours it. Only living
+  neighbours count unless `emptyIsMismatch`. `'match'` pays per same-colour neighbour;
+  `'change'` is the Stage 1 economy (one unit per colour change) and reproduces old runs
+  bit-for-bit. A lone organism earns nothing under the neighbour rules, so random founders
+  start with `founderChildren x reproCost` energy, and the spinner/walker/crawler demos force
+  `'change'` (alone on the grid, they would never reproduce otherwise).
+- `reproCost` 20 was calibrated against the `'change'` income (~1/tick). Neighbour income runs
+  0-6/tick, so under the default it barely constrains: mean energy sits ~230 and the grid still
+  saturates. Raising it only delays saturation (measured 2026-10-11, see DEVPLAN).
 - **`genomeId` reads the rule table as a base-(3n+1) number with q=0 as the MOST significant
   digit.** The atlas layout depends on it: at n=2, `y = id/343` is the first three conditions
   and `x = id%343` the last three, which is why the row band means "its rule when c0 facing
   empty". Change the digit order and the atlas silently means something else. The smoke test
   pins the bijection over all 117,649 genomes.
+- **Movement is a high bit on each output: `code = move*3n + colour*3 + rot`** (`movement`
+  param, off by default). Off, every code and id is the Stage 1 one, so the radix is 3n+1 and
+  everything above holds unchanged; on, the radix is 6n+1 (13^6 at n=2) and the atlas indexes
+  by `skeletonId` (move bits dropped). Toggling it must rebuild the World. A mover steps into
+  the faced cell only if it is empty, and its child is born in the cell it VACATED.
+- **The move bit is neutral wherever the faced cell is alive** (4 of 6 conditions at n=2): a
+  move there is always blocked. So with movement on, 16 genome ids share each phenotype, and
+  distinct/effective genotype counts are inflated by drift in those bits — don't compare them
+  across the toggle without saying so.
 - **Quote the effective number, not the distinct count**, whenever describing diversity.
 
 ## Conventions

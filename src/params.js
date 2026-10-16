@@ -15,8 +15,22 @@ var PARAMETERS = {
                          // and it makes simultaneous births into one cell impossible)
 
   // --- energy economy (DEVPLAN fork 2: fixed cost per reproduction) ---
-  energyPerTransition: 1, // earned when the rule's output colour differs from the current one
+  energyRule: 'mismatch', // how an organism earns, each tick, after its rule has recoloured it:
+                          //   'mismatch' — one unit per neighbour whose colour differs from its own
+                          //   'match'    — one unit per neighbour whose colour equals its own
+                          //   'change'   — one unit when the rule changed its colour (the Stage 1
+                          //                economy; spinner/walker/crawler demos use this)
+                          // Neighbour rules pay 0..6 per tick, so income is NOT ~1/tick any more.
+  emptyIsMismatch: false, // mismatch only: does an empty neighbour count as a non-match? false =
+                          // income comes only from contact with living organisms, so a lone
+                          // organism earns nothing. true = open space pays, lone earns 6/tick.
+  founderChildren: 1,     // each random founder starts with founderChildren x reproCost energy.
+                          // Under the neighbour rules a scattered founder earns nothing alone, so
+                          // this buys contact. Counted in children, not energy, so moving
+                          // reproCost can't silently starve the founders. Stage 1 founders had 0.
+  energyPerTransition: 1, // the unit: earned per colour change, or per (mis)matching neighbour
   rotationCost: 0,        // fork 3: rotation is free by default
+  moveCost: 0,            // paid when an organism actually steps (movement on only)
   reproCost: 20,          // fixed cost to place a child. Calibrated to income, NOT to genome
                           // size: an organism earns ~1/tick, so 20 means "20 ticks of work
                           // per child". At reproCost 1 the economy constrains nothing and the
@@ -26,6 +40,13 @@ var PARAMETERS = {
   // --- reproduction (DEVPLAN fork 1) ---
   childOrientation: 'inherit', // 'inherit' (child faces the direction it was born in —
                                // filaments and straight runs) | 'offsetR' | 'offsetL' | 'random'
+
+  // --- movement ---
+  movement: false,        // false: organisms only recolour, turn and reproduce (the Stage 1
+                          // model, 7^6 genomes at n=2). true: every rule output also carries a
+                          // move bit — step into the faced cell if it is empty, leaving a child
+                          // in the vacated cell when reproCost is affordable. 13^6 genomes.
+                          // Changes the genome encoding, so toggling it resets the world.
 
   // --- death ---
   pDeath: 0.01,          // random death per tick per organism (on top of rule-absence death)
@@ -71,13 +92,22 @@ var PARAMETERS = {
 };
 
 // Schema drives the auto-generated control panel (ui.js). One entry per live-tunable.
+// A `type: 'bool'` entry renders as a checkbox and a `type: 'choice'` entry as a dropdown,
+// instead of a slider.
 var PARAM_SCHEMA = [
+  { key: 'movement', label: 'Movement (M)', type: 'bool', resets: true },
+  { key: 'energyRule', label: 'Energy from', type: 'choice',
+    options: [['mismatch', 'mismatching neighbours'], ['match', 'matching neighbours'],
+              ['change', 'colour change (Stage 1)']] },
+  { key: 'emptyIsMismatch', label: 'Empty neighbour = mismatch', type: 'bool' },
+  { key: 'founderChildren', label: 'Founder children', min: 0, max: 5, step: 1, resets: true },
   { key: 'n', label: 'Colours (n)', min: 2, max: 6, step: 1, resets: true },
   { key: 'initialSeeds', label: 'Seeds', min: 1, max: 800, step: 1, resets: true },
   { key: 'absentP', label: 'Absent-rule p', min: 0, max: 1, step: 0.01 },
   { key: 'mutationRate', label: 'Mutation rate', min: 0, max: 0.5, step: 0.005 },
   { key: 'reproCost', label: 'Repro cost', min: 0, max: 100, step: 1 },
   { key: 'rotationCost', label: 'Rotation cost', min: 0, max: 5, step: 0.5 },
+  { key: 'moveCost', label: 'Move cost', min: 0, max: 5, step: 0.5 },
   { key: 'pDeath', label: 'Random death', min: 0, max: 0.05, step: 0.001 },
   { key: 'updatesPerDraw', label: 'Speed', min: 1, max: 100, step: 1 },
   { key: 'framesPerUpdate', label: 'Slow-mo', min: 1, max: 60, step: 1 },

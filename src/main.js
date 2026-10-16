@@ -44,8 +44,16 @@ function reset() {
 // per tick and the mechanism is legible: the spinner completes a disc in six ticks and the
 // walker advances one hex per tick. At the shipped reproCost the same genomes behave the
 // same way, just twenty times slower, which reads as a stall rather than a demonstration.
+//
+// The crawler is a movement organism, so seeding it switches movement on. The spinner and
+// walker never set a move bit, so they behave identically with movement on or off.
+//
+// All three demos earn by colour CHANGE: they were built for that economy, and alone on an
+// empty grid a neighbour rule would pay them nothing, so they would never reproduce.
 function seedNamed(kind) {
   PARAMETERS.n = 2;
+  PARAMETERS.energyRule = 'change';
+  if (kind === 'crawler') PARAMETERS.movement = true;
   PARAMETERS.seedGenome = kind;
   PARAMETERS.initialSeeds = 0;
   PARAMETERS.mutationRate = 0;
@@ -53,9 +61,10 @@ function seedNamed(kind) {
   PARAMETERS.reproCost = 1;
   reset();
   const col = (world.cols / 2) | 0, row = (world.rows / 2) | 0;
-  world.place(col * world.rows + row, 0, 0, kind === 'spinner' ? spinnerGenome() : walkerGenome());
+  world.place(col * world.rows + row, 0, 0, kind === 'spinner' ? spinnerGenome()
+                                          : kind === 'crawler' ? crawlerGenome() : walkerGenome());
   refreshControls();
-  setStatus(kind + ' seeded at centre — reproCost 1, mutation and random death off. ' +
+  setStatus(kind + ' seeded at centre — energy from colour change, reproCost 1, mutation and random death off. ' +
     'Press R to return to the evolving default.');
 }
 
@@ -63,6 +72,13 @@ function toggleGenotypeView() {
   PARAMETERS.drawMode = PARAMETERS.drawMode === 'state' ? 'genotype' : 'state';
 }
 function toggleFaces() { PARAMETERS.showFaces = !PARAMETERS.showFaces; }
+// Movement changes the genome encoding, so a toggle always starts a fresh world.
+function toggleMovement() {
+  PARAMETERS.movement = !PARAMETERS.movement;
+  reset();
+  refreshControls();
+  setStatus('movement ' + (PARAMETERS.movement ? 'ON' : 'OFF') + ' — world reset');
+}
 function setStatsPage(i) { PARAMETERS.statsPage = i; }
 
 // Canvas point for a mouse event, corrected for any CSS scaling of the canvas element.
@@ -106,6 +122,8 @@ window.addEventListener('keydown', function (e) {
   else if (k === 'r') reset();
   else if (k === 's') seedNamed('spinner');
   else if (k === 'w') seedNamed('walker');
+  else if (k === 'c') seedNamed('crawler');
+  else if (k === 'm') toggleMovement();
 });
 
 window.onload = function () {

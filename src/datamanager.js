@@ -29,7 +29,7 @@ var DataManager = class DataManager {
       this.samples.push({
         tick: s.tick, population: s.population, density: s.density, meanEnergy: s.meanEnergy,
         lethal: s.lethal, distinct: s.distinct, effective: s.effective, simpson: s.simpson,
-        topShare: s.topShare, topId: s.topId, births: s.births, deaths: s.deaths,
+        topShare: s.topShare, topId: s.topId, births: s.births, deaths: s.deaths, moves: s.moves,
       });
       if (typeof setStatus === 'function') {
         setStatus('t=' + s.tick + '  pop=' + s.population +

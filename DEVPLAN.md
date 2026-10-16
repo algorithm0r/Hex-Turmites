@@ -81,6 +81,8 @@ machinery is agnostic to what a condition *is*, so it transfers directly.
 - **Stage 2 complete** (four-page stats panel, genome-space atlas).
 - Live on GitHub Pages (https://algorithm0r.github.io/Hex-Turmites/, from `main`), with DB
   writes disabled on that host. Browser speed has Speed (fast-forward) and Slow-mo controls.
+- Movement as a toggle (a move bit per rule; child born in the vacated cell) and a choice of
+  energy source (`mismatch` default, `match`, Stage 1 `change`). Both described below.
 
 ## Not yet built
 - Stages 1b, 2b, 3 and 4 below.
@@ -90,9 +92,36 @@ machinery is agnostic to what a condition *is*, so it transfers directly.
   parent's face at sense time, before the rule's rotation). This is what makes the walker a
   straight line. `offsetR` / `offsetL` / `random` are parameters, unswept.
 - **Fork 2 — reproduction gating:** fixed cost, `reproCost`. The scale matters more than the
-  mechanism: income is ~1 energy/tick, so the cost has to be **tens of ticks** to constrain
-  anything. At `reproCost: 1` the grid saturates almost immediately.
+  mechanism: under the Stage 1 colour-change income (~1 energy/tick) the cost has to be **tens
+  of ticks** to constrain anything, and at `reproCost: 1` the grid saturates almost
+  immediately. The income side changed 2026-10-11 (neighbour rules, 0-6/tick; see below).
 - **Fork 3 — rotation cost:** free (`rotationCost: 0`), unswept. Left as a dial.
+
+## Changed 2026-10-11 — the energy source (fork 2 revisited)
+Income now comes from the neighbourhood, not from colour change: `energyRule` is `'mismatch'`
+(default, Chris's preference), `'match'`, or `'change'` (Stage 1, bit-identical). Empty cells
+count as mismatches only if `emptyIsMismatch`. Founders are funded with `founderChildren`
+births, because a scattered founder earns nothing alone. First measurements (4-6 seeds, 2026-10-11):
+- **Mismatch does not produce mixing.** The unlike-neighbour fraction among living pairs is
+  0.42 (living-only) and 0.37 (empty pays), below the 0.5 a colour-blind population would give
+  and about the same as `'change'` (0.43). `'match'` clumps hard (0.17). So the rule changes
+  what pays without, so far, making the population checkerboard. Unexplained.
+- **It does not fix saturation.** Density ~0.99 at reproCost 20; at 25-50 every surviving
+  run still reaches 0.91-0.99 by t=3000, and from 40 up the founders start dying out.
+  Income (0-6/tick) dwarfs the cost, so energy is not what limits reproduction.
+
+## Added 2026-10-11 — movement (a toggle, off by default)
+Every rule output gains a move bit (Chris's choice: per rule, not per genome). Moving into the
+empty faced cell replaces forward reproduction, and the child, if affordable, is born in the
+vacated cell (Chris's choice over "move instead of reproducing"). `moveCost` is a dial at 0.
+Consequences to keep in view:
+- The n=2 space becomes 13^6 = 4,826,809. Still enumerable, but Stage 3's exhaustive atlas is
+  41x bigger with movement on. The live atlas shows move-free skeletons (343x343) instead.
+- The move bit only acts when the faced cell is empty, so it is **neutral in 4 of the 6 n=2
+  conditions**. Diversity counts with movement on include drift in those bits; a phenotype id
+  that drops them is the honest comparison (not built).
+- The rejected alternative, "a move uses the cell, so no birth that tick", makes moving cost
+  reproduction. It is one branch in `world.js` if a sweep ever wants it.
 
 ## Stages
 ### Stage 1 — The face model  [ DONE 2026-09-18 ]
@@ -115,7 +144,8 @@ rule table is small enough that evolution solves it almost immediately — which
 - [ ] Decide whether saturation is a problem to fix or the honest result to report
 - [ ] Candidate pressures, if it needs one: crowding cost, energy cap, per-tick metabolism,
       an ageing term, or a cost that scales with the number of non-absent rules
-- [ ] Sweep `reproCost` x `pDeath` x `mutationRate` properly and map the regimes
+- [ ] Sweep `reproCost` x `pDeath` x `mutationRate` properly and map the regimes (now also
+      x `energyRule`; a first pass at reproCost 20-400 under mismatch is noted above)
 **Done when:** there is either a parameter regime with sustained non-saturating dynamics, or
 a written argument that saturation is the model's real behaviour and the interest is elsewhere.
 

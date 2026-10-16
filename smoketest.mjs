@@ -37,6 +37,8 @@ function bare(over) {
     gridCols: 41, gridRows: 41, n: 2, initialSeeds: 0, seedGenome: 'random',
     mutationRate: 0, pDeath: 0, absentP: 0, reproCost: 1, rotationCost: 0,
     energyPerTransition: 1, childEnergy: 0, childOrientation: 'inherit', asyncUpdate: true,
+    movement: false, moveCost: 0,
+    energyRule: 'change', emptyIsMismatch: false, founderChildren: 0,   // the economy the demos are built on
   }, over || {});
   return new World();
 }
@@ -195,7 +197,7 @@ console.log('genome identity and diversity');
     '  explored=' + (ex.frac * 100).toFixed(3) + '%');
 
   // A monoculture must read as diversity 1, whatever the population size.
-  Object.assign(P, { seed: 7, gridCols: 41, gridRows: 41, n: 2, initialSeeds: 0,
+  Object.assign(P, { seed: 7, gridCols: 41, gridRows: 41, n: 2, initialSeeds: 0, energyRule: 'change',
     mutationRate: 0, pDeath: 0, absentP: 0, reproCost: 1, rotationCost: 0,
     energyPerTransition: 1, childEnergy: 0, childOrientation: 'inherit', asyncUpdate: true });
   const w2 = new World();
@@ -271,6 +273,172 @@ console.log('stats tabs');
   const last = sorted[sorted.length - 1];
   check('tab strip stays inside the panel', last.x + last.w <= bw + P.panelWidth,
         'right edge ' + Math.round(last.x + last.w) + ' <= ' + (bw + P.panelWidth));
+
+  // Movement widens the allele table to 13 slots and turns the atlas into a skeleton map —
+  // every page has to survive that too.
+  Object.assign(P, DEFAULTS, { seed: 5151, movement: true });
+  const wm = new World();
+  const stm = new Stats(wm);
+  run(wm, 200);
+  stm.sample(200);
+  const vm = new Views(wm, stm);
+  let mDrew = true, mErr = '';
+  for (let pg = 0; pg < 4; pg++) {
+    P.statsPage = pg;
+    try { vm.draw(ctx); } catch (e) { mDrew = false; mErr = 'page ' + pg + ': ' + e.message; }
+  }
+  check('all four pages draw with movement on', mDrew, mErr);
+  check('movement palette covers every slot', vm.palette.length === stm.nslot,
+        vm.palette.length + ' colours for ' + stm.nslot + ' slots');
+  Object.assign(P, DEFAULTS);
+}
+
+// ─── 7. MOVEMENT — a move bit per rule; step into empty, leave a child behind ────────────
+console.log('movement');
+{
+  const { crawlerGenome, genomeId, genomeFromId, skeletonId, nOutputs, genomeSpaceSize, outCode,
+          ROT_NONE, Stats } = globalThis;
+
+  // The encoding: off is the Stage 1 space exactly, on doubles the outputs.
+  P.movement = false;
+  const offOut = nOutputs(2), offSpace = genomeSpaceSize(2);
+  P.movement = true;
+  const onOut = nOutputs(2), onSpace = genomeSpaceSize(2);
+  check('movement off: 6 outputs, 7^6 = 117,649 genomes', offOut === 6 && offSpace === 117649,
+        offOut + ' outputs, ' + offSpace);
+  check('movement on: 12 outputs, 13^6 = 4,826,809 genomes', onOut === 12 && onSpace === 4826809,
+        onOut + ' outputs, ' + onSpace);
+
+  // id <-> genome over the bigger space: every 7th id plus both ends, about 690k round trips.
+  let bad = 0;
+  const buf = new Int8Array(6);
+  for (let i = 0; i < onSpace; i += 7) { genomeFromId(i, 2, buf); if (genomeId(buf, 0, 6, 2) !== i) bad++; }
+  genomeFromId(onSpace - 1, 2, buf); if (genomeId(buf, 0, 6, 2) !== onSpace - 1) bad++;
+  check('movement genome id round-trips (every 7th of 4.8M)', bad === 0, bad + ' mismatches');
+
+  // Dropping move bits lands on the Stage 1 id: the atlas coordinate means the same thing.
+  const crawl = crawlerGenome();
+  const stripped = Int8Array.from(crawl, (v) => (v < 0 ? v : v % 6));
+  P.movement = false;
+  const stage1Id = genomeId(stripped, 0, 6, 2);
+  P.movement = true;
+  check('skeleton id of the crawler = Stage 1 id of its move-free twin',
+        skeletonId(crawl, 0, 6, 2) === stage1Id, skeletonId(crawl, 0, 6, 2) + ' vs ' + stage1Id);
+
+  // A crawler that can never afford a child is ONE organism that travels: no births, no deaths.
+  {
+    const T = 15, DIR = 0, col = 20, row = 30;
+    const w = bare({ movement: true, reproCost: 1e9 });
+    w.place(col * w.rows + row, 0, DIR, crawlerGenome());
+    run(w, T);
+    const alive = livingCells(w);
+    const wrap = (r) => ((r % w.rows) + w.rows) % w.rows;
+    const at = alive.length === 1 ? alive[0] : -1;
+    check('a non-reproducing crawler stays one organism', alive.length === 1, 'n=' + alive.length);
+    check('it moved exactly ' + T + ' cells north in ' + T + ' ticks',
+          at === col * w.rows + wrap(row - T), 'cell=' + at + ' expected=' + (col * w.rows + wrap(row - T)));
+    check('moves = ' + T + ', births = deaths = 0', w.moves === T && w.births === 0 && w.deaths === 0,
+          'moves=' + w.moves + ' births=' + w.births + ' deaths=' + w.deaths);
+  }
+
+  // One tick at reproCost 1: the parent steps forward, the child appears where it was.
+  {
+    const DIR = 0, col = 20, row = 30;
+    const w = bare({ movement: true, reproCost: 1 });
+    const start = col * w.rows + row;
+    w.place(start, 0, DIR, crawlerGenome());
+    run(w, 1);
+    const ahead = hexNeighbor(col, row, DIR, w.cols, w.rows);
+    check('after one tick: parent ahead, child in the vacated cell',
+          w.color[ahead] !== -1 && w.color[start] !== -1 && w.population() === 2,
+          'ahead=' + w.color[ahead] + ' behind=' + w.color[start] + ' pop=' + w.population());
+    check('the child behind faces the way its parent went (inherit)', w.face[start] === DIR,
+          'face=' + w.face[start]);
+    check('the parent paid reproCost, the child starts at childEnergy',
+          w.energy[ahead] === 0 && w.energy[start] === 0 && w.births === 1 && w.moves === 1,
+          'parent=' + w.energy[ahead] + ' child=' + w.energy[start] + ' births=' + w.births);
+  }
+
+  // Facing something alive, a move is blocked: the rule only recolours.
+  {
+    const col = 20, row = 30;
+    const w = bare({ movement: true, reproCost: 1e9 });
+    const me = col * w.rows + row, ahead = hexNeighbor(col, row, 0, w.cols, w.rows);
+    const wall = new Int8Array(6).fill(outCode(0, ROT_NONE, 0, 2));   // stays c0, never turns or moves
+    w.place(ahead, 0, 3, wall);
+    w.place(me, 0, 0, crawlerGenome());
+    run(w, 3);
+    check('a crawler facing a living cell does not move', w.color[me] !== -1 && w.moves === 0,
+          'moves=' + w.moves);
+  }
+
+  // The shipped economy with movement on: alive, moving, and every gene a legal code.
+  {
+    Object.assign(P, DEFAULTS, { seed: 909, movement: true });
+    const w = new World();
+    const st = new Stats(w);
+    run(w, 600);
+    let illegal = 0;
+    for (let i = 0; i < w.N; i++) {
+      if (w.color[i] === -1) continue;
+      for (let q = 0; q < w.ncond; q++) {
+        const v = w.genome[i * w.ncond + q];
+        if (v < -1 || v >= 12) illegal++;
+      }
+    }
+    const rec = st.sample(600);
+    const ex = st.explored();
+    check('shipped defaults + movement: population survives 600 ticks', rec.population > 0,
+          'pop=' + rec.population);
+    check('organisms actually move', w.moves > 0, 'moves=' + w.moves);
+    check('every gene is a legal movement code (-1..11)', illegal === 0, illegal + ' illegal');
+    check('the atlas stays 343 x 343 with movement on', st.atlasSide === 343 && ex.total === 117649,
+          'side=' + st.atlasSide + ' total=' + ex.total);
+    console.log('    movement @ t=600: pop=' + rec.population + ' density=' + rec.density.toFixed(3) +
+      ' effective(N1)=' + rec.effective.toFixed(1) + ' distinct=' + rec.distinct +
+      ' moves=' + w.moves + ' births=' + w.births + ' deaths=' + w.deaths +
+      ' skeletons explored=' + (ex.frac * 100).toFixed(3) + '%');
+  }
+  Object.assign(P, DEFAULTS);
+}
+
+// ─── 8. ENERGY RULES — what one organism earns from a fixed neighbourhood ────────────────
+// A c0 centre with two c1 neighbours, one c0 neighbour and three empty cells. Every organism
+// runs a "stay c0/c1, never turn" genome, so nobody changes colour and the neighbourhood holds
+// still for the tick. The centre's income is then exactly the count each rule defines.
+console.log('energy rules');
+{
+  const { outCode, ROT_NONE, condIndex } = globalThis;
+  const still = (c) => { const g = new Int8Array(6); for (let q = 0; q < 6; q++) g[q] = outCode(c, ROT_NONE, 0, 2); return g; };
+  const earned = (over) => {
+    const w = bare(Object.assign({ reproCost: 1e9 }, over));
+    const col = 20, row = 20, me = col * w.rows + row;
+    w.place(me, 0, 0, still(0));
+    w.place(w.nbr[me * 6 + 0], 1, 0, still(1));
+    w.place(w.nbr[me * 6 + 2], 1, 0, still(1));
+    w.place(w.nbr[me * 6 + 4], 0, 0, still(0));
+    run(w, 1);
+    return w.energy[me];
+  };
+  const cases = [
+    ['mismatch, living only: 2 unlike neighbours → 2', { energyRule: 'mismatch' }, 2],
+    ['mismatch, empty pays: 2 unlike + 3 empty → 5', { energyRule: 'mismatch', emptyIsMismatch: true }, 5],
+    ['match: 1 like neighbour → 1', { energyRule: 'match' }, 1],
+    ['match ignores emptyIsMismatch → still 1', { energyRule: 'match', emptyIsMismatch: true }, 1],
+    ['change: no colour change → 0', { energyRule: 'change' }, 0],
+  ];
+  for (const [name, over, want] of cases) {
+    const got = earned(over);
+    check(name, got === want, 'earned ' + got);
+  }
+
+  // Founders are funded in children, so raising reproCost cannot starve them.
+  Object.assign(P, DEFAULTS, { seed: 31, reproCost: 45 });
+  const wf = new World();
+  let funded = true;
+  for (let i = 0; i < wf.N; i++) if (wf.color[i] !== -1 && wf.energy[i] !== 45) funded = false;
+  check('founders start with founderChildren x reproCost energy', funded && DEFAULTS.founderChildren === 1);
+  Object.assign(P, DEFAULTS);
 }
 
 console.log('smoke: ' + (failures === 0 ? 'PASS' : 'FAIL (' + failures + ')'));

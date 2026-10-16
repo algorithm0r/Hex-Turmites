@@ -13,26 +13,37 @@
 //
 // GENOME SPACE = (3n + 1) ^ (n(n+1)).  n=2 → 7^6 = 117,649 (enumerable — this is the
 // whole argument for making n=2 primary). n=3 → 10^12, and the atlas is gone.
+//
+// MOVEMENT (PARAMETERS.movement). When on, every output also carries a move bit:
+//   code = move * 3n + colour * 3 + rot          → 6n codes
+// The move bit sits ABOVE the old codes, so with movement off every code, every genome id
+// and the 343x343 atlas mean exactly what they always did. With it on, n=2 is
+// 13^6 = 4,826,809 genomes (still enumerable). The flag is read live, so changing it
+// requires a fresh World — the control panel resets on toggle.
 var RULE_ABSENT = -1;
 
+function movementOn() { return !!PARAMETERS.movement; }
 function nConditions(n) { return n * (n + 1); }
-function nOutputs(n) { return 3 * n; }              // excludes RULE_ABSENT
-function genomeSpaceSize(n) { return Math.pow(3 * n + 1, n * (n + 1)); }
+function nOutputs(n) { return 3 * n * (movementOn() ? 2 : 1); }   // excludes RULE_ABSENT
+function genomeSpaceSize(n) { return Math.pow(nOutputs(n) + 1, n * (n + 1)); }
 
 function condIndex(self, facedColor, n) { return self * (n + 1) + (facedColor + 1); }
-function outCode(color, rot) { return color * 3 + rot; }
-function outColor(code) { return (code / 3) | 0; }
+function outCode(color, rot, move, n) { return color * 3 + rot + (move ? 3 * n : 0); }
+function outColor(code, n) { return ((code / 3) | 0) % n; }
 function outRot(code) { return code % 3; }
+function outMoves(code, n) { return code >= 3 * n; }
+function outLabel(code, n) {
+  return 'c' + outColor(code, n) + ['L', '-', 'R'][outRot(code)] + (outMoves(code, n) ? 'm' : '');
+}
 
 // Human-readable dump of one genome, for the console and for test failures.
 function genomeToString(g, n) {
-  const rotName = ['L', '-', 'R'];
   const parts = [];
   for (let self = 0; self < n; self++) {
     for (let f = -1; f < n; f++) {
       const code = g[condIndex(self, f, n)];
       const lhs = 'c' + self + '|' + (f < 0 ? 'dead' : 'c' + f);
-      parts.push(lhs + '->' + (code === RULE_ABSENT ? 'die' : 'c' + outColor(code) + rotName[outRot(code)]));
+      parts.push(lhs + '->' + (code === RULE_ABSENT ? 'die' : outLabel(code, n)));
     }
   }
   return parts.join('  ');
@@ -48,15 +59,29 @@ function genomeToString(g, n) {
 function genomeIdExact(n) { return genomeSpaceSize(n) <= Number.MAX_SAFE_INTEGER; }
 
 function genomeId(g, base, ncond, n) {
-  const radix = 3 * n + 1;
+  const radix = nOutputs(n) + 1;
   let id = 0;
   for (let q = 0; q < ncond; q++) id = id * radix + (g[base + q] + 1);
   return id;
 }
 
+// The genome's id with every move bit dropped: a base-(3n+1) number whatever the movement
+// setting. This is the atlas coordinate, so the 343x343 picture survives movement — each
+// pixel then stands for the 2^6 = 64 genomes that differ only in when they move. With
+// movement off it equals genomeId.
+function skeletonId(g, base, ncond, n) {
+  const radix = 3 * n + 1, span = 3 * n;
+  let id = 0;
+  for (let q = 0; q < ncond; q++) {
+    const v = g[base + q];
+    id = id * radix + (v === RULE_ABSENT ? 0 : (v % span) + 1);
+  }
+  return id;
+}
+
 // Inverse of genomeId — unpack an id back into a rule table.
 function genomeFromId(id, n, out) {
-  const ncond = nConditions(n), radix = 3 * n + 1;
+  const ncond = nConditions(n), radix = nOutputs(n) + 1;
   const g = out || new Int8Array(ncond);
   for (let q = ncond - 1; q >= 0; q--) {
     g[q] = (id % radix) - 1;
@@ -98,8 +123,9 @@ function mutateGenome(g, base, n, rate, absentP) {
 
 // ─── Named genomes (n = 2) ────────────────────────────────────────────────────
 // The two organisms Stage 1 has to demonstrate. Both flip colour every tick, because
-// energy is earned on colour CHANGE (fork 2: fixed cost per reproduction) — an organism
-// that never changes colour never earns and so can never reproduce.
+// they run on the 'change' economy (energyRule; seedNamed forces it), where energy is earned
+// on colour CHANGE — an organism that never changes colour never earns and so can never
+// reproduce. Alone on an empty grid the neighbour rules would pay them nothing at all.
 
 // SPINNER — "flip colour and turn right, always." Reproduces whenever its face lands on
 // an empty cell, so it tiles the six cells around itself and its children do the same:
@@ -108,8 +134,8 @@ function mutateGenome(g, base, n, rate, absentP) {
 function spinnerGenome() {
   const n = 2, g = new Int8Array(nConditions(n));
   for (let f = -1; f < n; f++) {
-    g[condIndex(0, f, n)] = outCode(1, ROT_R);   // colour 0 → colour 1, turn right
-    g[condIndex(1, f, n)] = outCode(0, ROT_R);   // colour 1 → colour 0, turn right
+    g[condIndex(0, f, n)] = outCode(1, ROT_R, 0, n);   // colour 0 → colour 1, turn right
+    g[condIndex(1, f, n)] = outCode(0, ROT_R, 0, n);   // colour 1 → colour 0, turn right
   }
   return g;
 }
@@ -120,7 +146,21 @@ function spinnerGenome() {
 //   c0|dead -> c1 -     c1|dead -> c0 -      every other condition: die
 function walkerGenome() {
   const n = 2, g = new Int8Array(nConditions(n)).fill(RULE_ABSENT);
-  g[condIndex(0, -1, n)] = outCode(1, ROT_NONE);  // facing empty: become c1, spawn ahead
-  g[condIndex(1, -1, n)] = outCode(0, ROT_NONE);  // facing empty: become c0, spawn ahead
-  return g;                                        // facing anything alive: no rule → die
+  g[condIndex(0, -1, n)] = outCode(1, ROT_NONE, 0, n);  // facing empty: become c1, spawn ahead
+  g[condIndex(1, -1, n)] = outCode(0, ROT_NONE, 0, n);  // facing empty: become c0, spawn ahead
+  return g;                                              // facing anything alive: no rule → die
+}
+
+// CRAWLER (movement on only) — "flip colour and step forward, always." It actually moves,
+// rather than walking by birth and death, and it leaves a child in each cell it vacates
+// whenever it can afford one. At reproCost 1 that is every tick: a straight trail of
+// children behind a single advancing head. The movement counterpart of the walker.
+//   c*|*  -> flip colour, no turn, move
+function crawlerGenome() {
+  const n = 2, g = new Int8Array(nConditions(n));
+  for (let f = -1; f < n; f++) {
+    g[condIndex(0, f, n)] = outCode(1, ROT_NONE, 1, n);
+    g[condIndex(1, f, n)] = outCode(0, ROT_NONE, 1, n);
+  }
+  return g;
 }

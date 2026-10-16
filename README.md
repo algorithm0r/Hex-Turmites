@@ -17,8 +17,25 @@ the shared engine v2.
   rule-absence kills, clones are exact without mutation) and prints metrics.
 
 ## In the browser
-`S` seeds a spinner, `W` a walker, `R` returns to the evolving default. `G` toggles genotype
-colouring, `F` toggles the face markers. **Speed** runs up to 100 ticks per frame; **Slow-mo**
+`S` seeds a spinner, `W` a walker, `C` a crawler, `R` returns to the evolving default. `G`
+toggles genotype colouring, `F` toggles the face markers.
+
+**Energy from** (dropdown) sets how organisms earn. Each tick, after the rule has recoloured
+an organism, it earns one unit per neighbour whose colour **differs** from its own (the
+default), or per neighbour whose colour **matches**, or (the Stage 1 rule) one unit when the
+rule changed its colour. By default only living neighbours count. Tick **Empty neighbour =
+mismatch** to make open space pay too. Because a lone organism earns nothing under the
+neighbour rules, random founders start with energy for **Founder children** births. The
+spinner, walker and crawler demos switch to the colour-change rule.
+
+**Movement** (checkbox, or `M`; off by default) gives every rule a move bit. A rule that says
+move, firing while the faced cell is empty, steps the organism into that cell and, if it can
+afford `reproCost`, leaves a child in the cell it vacated. Facing anything alive, the move is
+blocked. Off, the model is exactly the Stage 1 one. Toggling resets the world, because the
+genome gets twice the outputs per condition (13^6 genomes at n=2 instead of 7^6). The atlas
+then shows move-free skeletons, one pixel per 64 genomes, and rule labels carry a trailing `m`.
+The crawler (flip colour, never turn, always move) is the movement demonstrator: one head
+drawing a straight line of children behind it. **Speed** runs up to 100 ticks per frame; **Slow-mo**
 goes the other way, one tick every N frames (60 is about one tick a second), and overrides
 Speed while it is above 1.
 
@@ -27,8 +44,9 @@ to cycle:
 1. **Population** — density, effective and distinct genotypes, top clone share, lethal slots.
 2. **Gene pool** — the allele table. For each condition, what fraction of the population
    carries each output, plus one stacked strip per condition over time. At n=2 this is the
-   *complete* state of the gene pool (6x7), not a summary of it.
-3. **Atlas** — all 117,649 possible n=2 organisms as a 343x343 image (7^6 = 343^2), lit by
+   *complete* state of the gene pool (6x7, or 6x13 with movement), not a summary of it.
+3. **Atlas** — all 117,649 possible n=2 organisms as a 343x343 image (7^6 = 343^2; with
+   movement on, move-free skeletons, each pooling 64 genomes), lit by
    occupancy. Bright = alive now, dim = visited earlier. The 7x7 bands are labelled: the row
    band is the organism's rule when it is c0 facing empty, the column band when it is c1.
 4. **Lineages** — a Muller-style stack of every genotype that ever held share, each with its

@@ -97,7 +97,8 @@ var Observer = class Observer {
   // Page 4 (Lineages) is the place to confirm identity; its colours are a hash of the genome
   // id, deliberately arbitrary, and mean nothing about similarity.
   _ensureProjection(n, ncond) {
-    if (this._projN === n && this._projection) return;
+    // keyed on the slot count too: toggling movement changes it without changing n
+    if (this._projN === n && this._projSlots === nOutputs(n) + 1 && this._projection) return;
     let s = 0x9e3779b9;
     const rnd = () => {           // mulberry32
       s |= 0; s = (s + 0x6D2B79F5) | 0;

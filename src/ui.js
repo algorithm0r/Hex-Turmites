@@ -8,6 +8,8 @@ function buildControls() {
   const panel = document.getElementById('controlPanel');
   _controlRefreshers = [];
   for (const spec of PARAM_SCHEMA) {
+    if (spec.type === 'bool') { buildToggle(panel, spec); continue; }
+    if (spec.type === 'choice') { buildChoice(panel, spec); continue; }
     const wrap = document.createElement('label');
     wrap.className = 'ctl';
     wrap.appendChild(document.createTextNode(spec.label + ' '));
@@ -36,6 +38,45 @@ function buildControls() {
   buildButtons();
 }
 
+// A boolean parameter as a checkbox. Same contract as a slider: writes PARAMETERS, honours
+// `resets`, and registers a refresher so programmatic changes show up in the panel.
+function buildToggle(panel, spec) {
+  const wrap = document.createElement('label');
+  wrap.className = 'ctl toggle';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = !!PARAMETERS[spec.key];
+  input.onchange = function () {
+    PARAMETERS[spec.key] = input.checked;
+    if (spec.resets && typeof reset === 'function') reset();
+  };
+  wrap.appendChild(input);
+  wrap.appendChild(document.createTextNode(' ' + spec.label));
+  panel.appendChild(wrap);
+  _controlRefreshers.push(function () { input.checked = !!PARAMETERS[spec.key]; });
+}
+
+// A string parameter with a fixed set of values, as a dropdown. `options` is [value, label].
+function buildChoice(panel, spec) {
+  const wrap = document.createElement('label');
+  wrap.className = 'ctl';
+  wrap.appendChild(document.createTextNode(spec.label + ' '));
+  const sel = document.createElement('select');
+  for (const [value, text] of spec.options) {
+    const o = document.createElement('option');
+    o.value = value; o.textContent = text;
+    sel.appendChild(o);
+  }
+  sel.value = PARAMETERS[spec.key];
+  sel.onchange = function () {
+    PARAMETERS[spec.key] = sel.value;
+    if (spec.resets && typeof reset === 'function') reset();
+  };
+  wrap.appendChild(sel);
+  panel.appendChild(wrap);
+  _controlRefreshers.push(function () { sel.value = PARAMETERS[spec.key]; });
+}
+
 // Buttons that are not simple numeric sliders.
 function buildButtons() {
   const panel = document.getElementById('controlPanel');
@@ -45,6 +86,7 @@ function buildButtons() {
     ['Reset (R)', function () { reset(); }],
     ['Spinner (S)', function () { seedNamed('spinner'); }],
     ['Walker (W)', function () { seedNamed('walker'); }],
+    ['Crawler (C)', function () { seedNamed('crawler'); }],
     ['Genotype view (G)', function () { toggleGenotypeView(); }],
     ['Faces (F)', function () { toggleFaces(); }],
   ];

@@ -8,12 +8,27 @@
 //   1. sense the single cell its face points at          (egocentric — the whole point)
 //   2. look up cond = (self colour, faced colour) in the genome
 //   3. no rule → die. Otherwise the rule gives (next colour, rotation)
-//   4. colour change earns energy; rotation costs
+//   4. earn energy (energyRule, below); rotation costs
 //   5. if the SENSED cell was empty and energy >= reproCost, place a mutated child in it
 //
 // Step 5 uses the PRE-rotation face deliberately: the organism reproduces into the cell it
 // actually looked at, and the rotation takes effect for the next tick. That is what makes
 // "spawn a copy, then turn and see it" the two-tick sequence the model is built around.
+//
+// ENERGY (PARAMETERS.energyRule). Earned after the rule has recoloured the organism, so it is
+// paid for the state the organism put itself in:
+//   'mismatch' — one unit per neighbour of a different colour (optionally counting empty
+//                cells as different: emptyIsMismatch). Rewards sitting against the other colour.
+//   'match'    — one unit per neighbour of the same colour. Rewards same-colour clumps.
+//   'change'   — one unit when the rule changed the organism's colour (the Stage 1 economy).
+// Neighbours are read live, so under async update some have already acted this tick.
+//
+// MOVEMENT (PARAMETERS.movement, off by default). A rule whose move bit is set, firing while
+// the sensed cell is empty, replaces step 5: the organism steps INTO the sensed cell (paying
+// moveCost) and, if it can then afford reproCost, leaves a mutated child in the cell it just
+// vacated. Facing anything alive, the move is blocked and the rule only recolours and turns.
+// The child behind takes its face from the same childOrientation rule as a forward child,
+// computed from the pre-rotation face, so under 'inherit' it faces the way its parent went.
 var World = class World {
   constructor() {
     const P = PARAMETERS;
@@ -35,11 +50,23 @@ var World = class World {
     this.bornTick = new Int32Array(this.N).fill(-1);
 
     this._order = new Int32Array(this.N);
+    // Neighbour table, 6 per cell in DIR order: the neighbour energy rules read all six every
+    // tick for every organism, so compute the torus wrap once rather than per lookup.
+    this.nbr = new Int32Array(this.N * 6);
+    for (let c = 0; c < this.cols; c++) {
+      for (let r = 0; r < this.rows; r++) {
+        const i = c * this.rows + r;
+        for (let d = 0; d < 6; d++) this.nbr[i * 6 + d] = hexNeighbor(c, r, d, this.cols, this.rows);
+      }
+    }
     this.tick = 0;
+    this.movement = movementOn();                   // fixed for this world's lifetime
     this.births = 0;
     this.deaths = 0;
+    this.moves = 0;
     this.birthsThisPeriod = 0;
     this.deathsThisPeriod = 0;
+    this.movesThisPeriod = 0;
 
     this.seed();
   }
@@ -55,6 +82,7 @@ var World = class World {
       const i = randomInt(this.N);
       if (this.color[i] !== -1) continue;              // occupied — skip, don't retry
       this.place(i, randomInt(this.n), randomInt(6), named);
+      this.energy[i] = (P.founderChildren || 0) * P.reproCost;
     }
   }
 
@@ -86,6 +114,10 @@ var World = class World {
     const earn = P.energyPerTransition, pDeath = P.pDeath;
     const childOri = P.childOrientation, childEnergy = P.childEnergy;
     const mutationRate = P.mutationRate, absentP = P.absentP;
+    const movement = this.movement, moveCost = P.moveCost;
+    const nbr = this.nbr;
+    const eRule = P.energyRule === 'match' ? 1 : P.energyRule === 'change' ? 0 : 2;   // 2 = mismatch
+    const emptyPays = eRule === 2 && !!P.emptyIsMismatch;
 
     // Snapshot who is alive at the start of the tick. Organisms born during this tick are
     // not in the list, and the bornTick guard keeps a newborn from acting before its first
@@ -118,11 +150,43 @@ var World = class World {
       if (out === RULE_ABSENT) { this.kill(i); continue; }
 
       // 4. act: recolour (earning), then rotate (costing)
-      const nextColor = outColor(out), rot = outRot(out);
+      const nextColor = outColor(out, n), rot = outRot(out);
       let e = energy[i];
-      if (nextColor !== self) { color[i] = nextColor; e += earn; }
+      if (nextColor !== self) { color[i] = nextColor; if (eRule === 0) e += earn; }
+      if (eRule !== 0) {
+        let k = 0;
+        for (let d = i * 6, end = d + 6; d < end; d++) {
+          const c = color[nbr[d]];
+          if (c === -1) { if (emptyPays) k++; }
+          else if ((c === nextColor) === (eRule === 1)) k++;
+        }
+        e += earn * k;
+      }
       if (rot !== ROT_NONE) { face[i] = rotateFace(f, rot); e -= rotationCost; }
       if (e < 0) e = 0;
+
+      // 5m. move into the cell just sensed, leaving a child behind if the energy is there
+      if (movement && faced === -1 && outMoves(out, n)) {
+        e -= moveCost;
+        if (e < 0) e = 0;
+        const pbase = i * ncond, mbase = j * ncond;
+        for (let q = 0; q < ncond; q++) genome[mbase + q] = genome[pbase + q];
+        color[j] = nextColor;
+        face[j] = face[i];                       // post-rotation: the turn still applies next tick
+        bornTick[j] = bornTick[i];               // j was empty at the snapshot, so it won't act again
+        this.moves++;
+        this.movesThisPeriod++;
+        if (e >= reproCost) {
+          e -= reproCost;                        // i still holds the parent's genome: mutate in place
+          if (mutationRate > 0) mutateGenome(genome, pbase, n, mutationRate, absentP);
+          this._birth(i, nextColor, f, childOri, childEnergy, t);
+        } else {
+          color[i] = -1;                         // vacated — not a death
+          energy[i] = 0;
+        }
+        energy[j] = e;
+        continue;
+      }
 
       // 5. reproduce into the cell just sensed, if it was empty and the energy is there
       if (faced === -1 && e >= reproCost) {
@@ -130,18 +194,23 @@ var World = class World {
         const cbase = j * ncond, pbase = i * ncond;
         for (let q = 0; q < ncond; q++) genome[cbase + q] = genome[pbase + q];
         if (mutationRate > 0) mutateGenome(genome, cbase, n, mutationRate, absentP);
-        color[j]  = nextColor;                   // the child is a copy of the parent as it now is
-        face[j]   = childOri === 'inherit' ? f
-                  : childOri === 'offsetR' ? (f + 1) % 6
-                  : childOri === 'offsetL' ? (f + 5) % 6
-                  : randomInt(6);
-        energy[j] = childEnergy;
-        bornTick[j] = t;
-        this.births++;
-        this.birthsThisPeriod++;
+        this._birth(j, nextColor, f, childOri, childEnergy, t);   // a copy of the parent as it now is
       }
       energy[i] = e;
     }
+  }
+
+  // A child in cell c whose genome is already in place. `f` is the parent's PRE-rotation face.
+  _birth(c, col, f, childOri, childEnergy, t) {
+    this.color[c] = col;
+    this.face[c] = childOri === 'inherit' ? f
+                 : childOri === 'offsetR' ? (f + 1) % 6
+                 : childOri === 'offsetL' ? (f + 5) % 6
+                 : randomInt(6);
+    this.energy[c] = childEnergy;
+    this.bornTick[c] = t;
+    this.births++;
+    this.birthsThisPeriod++;
   }
 
   // ─── metrics ────────────────────────────────────────────────────────────────
@@ -187,8 +256,9 @@ var World = class World {
       topCloneShare: pop ? g.topClone / pop : 0,
       births: this.birthsThisPeriod,
       deaths: this.deathsThisPeriod,
+      moves: this.movesThisPeriod,
     };
   }
 
-  resetPeriodCounters() { this.birthsThisPeriod = 0; this.deathsThisPeriod = 0; }
+  resetPeriodCounters() { this.birthsThisPeriod = 0; this.deathsThisPeriod = 0; this.movesThisPeriod = 0; }
 };
