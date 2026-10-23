@@ -83,6 +83,9 @@ machinery is agnostic to what a condition *is*, so it transfers directly.
   writes disabled on that host. Browser speed has Speed (fast-forward) and Slow-mo controls.
 - Movement as a toggle (a move bit per rule; child born in the vacated cell) and a choice of
   energy source (`mismatch` default, `match`, Stage 1 `change`). Both described below.
+- Up to 42 colours (21 with movement); payoff-table and neighbour-diversity income; face
+  transfer (drink / pour / eat); per-rule reproduction cost (off); `absentP` 0 by default.
+  See "Added 2026-10-23" below.
 
 ## Not yet built
 - Stages 1b, 2b, 3 and 4 below.
@@ -123,6 +126,21 @@ Consequences to keep in view:
 - The rejected alternative, "a move uses the cell, so no birth that tick", makes moving cost
   reproduction. It is one branch in `world.js` if a sweep ever wants it.
 
+## Added 2026-10-23 — more colours, more economies (all options, Chris's choices)
+- **n up to 42** (21 with movement): the Int8 genome's limit, enforced by `maxColours()`.
+  Genome = n(n+1) slots (1,806 at n=42). Random founders now always carry rules for every
+  facing-empty condition (`founderOpenRules`), without which every n >= 30 went extinct.
+- **`absentP` 0 is the default**, so rule-absence death is off and random death is the only
+  death unless eating is on. 0.15 reproduces the earlier founders' lethality.
+- **Income generalised.** `'payoff'` takes an n x n table (match / mismatch replay the old
+  rules exactly; cyclic; seeded random; custom). `'diversity'` pays per distinct unlike colour.
+- **Face transfer.** Drink from an unlike faced neighbour, pour into a like one; `'eat'` kills
+  a neighbour drunk to 0. Under mismatch income eating drives most runs extinct; under
+  colour-change income at n=2 it held ~0.53 density over 2000 ticks (3 seeds).
+- **Per-rule reproduction cost** built and left off (Chris). It never makes n=2 drop a rule;
+  at n=6 it sheds a few rules at k=0.5 under colour-change income; at n=42 it only shrinks
+  populations, since most of the 1,806 slots look neutral (filled stays at 1-absentP).
+
 ## Stages
 ### Stage 1 — The face model  [ DONE 2026-09-18 ]
 - [x] Hex grid + the 6 neighbour offsets (ported from Hex CA, now in `src/hex.js`)
@@ -144,6 +162,10 @@ rule table is small enough that evolution solves it almost immediately — which
 - [ ] Decide whether saturation is a problem to fix or the honest result to report
 - [ ] Candidate pressures, if it needs one: crowding cost, energy cap, per-tick metabolism,
       an ageing term, or a cost that scales with the number of non-absent rules
+      (the last is built as `reproCostPerRule`, 2026-10-23; eating is a new candidate)
+- [ ] Check whether colour-change income + `faceTransfer: 'eat'` is a sustained
+      non-saturating regime (n=2: density ~0.53 at t=2000, 3/3 seeds): longer runs, more
+      seeds, and why eating kills so hard under mismatch income
 - [ ] Sweep `reproCost` x `pDeath` x `mutationRate` properly and map the regimes (now also
       x `energyRule`; a first pass at reproCost 20-400 under mismatch is noted above)
 **Done when:** there is either a parameter regime with sustained non-saturating dynamics, or
@@ -189,3 +211,16 @@ on it.
 - [ ] full ordered 6-tuple from the face — the rung that subsumes Hex CA
 **Done when:** the ordered-tuple model reproduces Hex CA behavior when orientation is
 discarded.
+
+## Backlog
+- [ ] fix: gene-pool page at large n (1,806 rows at n=42) has never been looked at; it may be
+      unreadable. Also frame rate at large n with the pane visible.
+- [ ] idea: per-slot encounter counts, to test whether most large-n slots are neutral (filled
+      share of used vs never-used slots).
+- [ ] idea: eating's newborn problem: children start at `childEnergy` 0, so an unlike
+      neighbour eats them on sight (untested guess); try childEnergy > 0, or kill only prey
+      that had energy.
+- [ ] idea: run cyclic payoff and diversity income at n >= 3, where they differ from mismatch.
+- [ ] idea: resource field income (food per cell that regrows; harvested where you sit or face):
+      a density-dependent limit that could break saturation.
+- [ ] feat: `Int16Array` genome to go past n=42 (doubles genome memory).

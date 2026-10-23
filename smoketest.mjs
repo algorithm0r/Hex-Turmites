@@ -150,8 +150,16 @@ console.log('shipped defaults (reproCost=' + DEFAULTS.reproCost + ' pDeath=' + D
   // s.births is cumulative here: resetPeriodCounters() is the DataManager's job and no
   // DataManager runs in the smoke test.
   check('population is still turning over', s.births > 0, 'births=' + s.births);
-  check('selection purged lethal conditions', s.meanAbsentRules < DEFAULTS.absentP,
-        'lethal=' + (s.meanAbsentRules * 100).toFixed(2) + '% < seeded ' + (DEFAULTS.absentP * 100) + '%');
+  // Founders with open-space rules carry absent slots only in the n^2 non-empty conditions.
+  // At absentP 0 (the default) there are none to purge, and mutation must never make one.
+  const seeded = DEFAULTS.absentP * (DEFAULTS.founderOpenRules ? DEFAULTS.n / (DEFAULTS.n + 1) : 1);
+  if (seeded > 0) {
+    check('selection purged lethal conditions', s.meanAbsentRules < seeded,
+          'lethal=' + (s.meanAbsentRules * 100).toFixed(2) + '% < seeded ' + (seeded * 100).toFixed(1) + '%');
+  } else {
+    check('absentP 0: no organism lacks a rule after 1000 ticks of mutation', s.meanAbsentRules === 0,
+          'lethal=' + (s.meanAbsentRules * 100).toFixed(2) + '%');
+  }
   console.log('    tick=' + s.tick + ' pop=' + s.population + ' density=' + s.density.toFixed(3) +
     ' genotypes=' + s.distinctGenotypes + ' topClone=' + (s.topCloneShare * 100).toFixed(1) + '%' +
     ' meanEnergy=' + s.meanEnergy.toFixed(2) +
@@ -432,12 +440,168 @@ console.log('energy rules');
     check(name, got === want, 'earned ' + got);
   }
 
+  // The payoff rule generalises match/mismatch, and diversity counts distinct unlike colours.
+  // Same fixture: the centre faces a c1 (direction 0), so with transfer on it drinks from it.
+  const more = [
+    ['payoff mismatch table → 2 (= mismatch)', { energyRule: 'payoff', payoffTable: 'mismatch' }, 2],
+    ['payoff match table → 1 (= match)', { energyRule: 'payoff', payoffTable: 'match' }, 1],
+    ['payoff mismatch, emptyPayoff 1 → 5 (= emptyIsMismatch)', { energyRule: 'payoff', payoffTable: 'mismatch', emptyPayoff: 1 }, 5],
+    ['payoff custom [[0,3],[0,0]] → 2 x 3 = 6', { energyRule: 'payoff', payoffTable: 'custom', payoffMatrix: [[0, 3], [0, 0]] }, 6],
+    ['diversity: two c1 neighbours are ONE unlike colour → 1', { energyRule: 'diversity' }, 1],
+  ];
+  for (const [name, over, want] of more) {
+    const got = earned(Object.assign({ emptyPayoff: 0, payoffMatrix: null, faceTransfer: 'none' }, over));
+    check(name, got === want, 'earned ' + got);
+  }
+  // Face transfer: one actor and the neighbour it faces, energies set by hand. Income is
+  // 'change' with a never-recolour genome, so every unit that moves is the transfer.
+  {
+    const run1 = (mode, myE, itsE, itsColour) => {
+      const w = bare({ reproCost: 1e9, energyRule: 'change', faceTransfer: mode, transferAmount: 5 });
+      const me = 20 * w.rows + 20, it = w.nbr[me * 6 + 0];
+      w.place(me, 0, 0, still(0));
+      w.place(it, itsColour, 3, still(itsColour));   // faces back at me (direction 3 = S)
+      w.energy[me] = myE; w.energy[it] = itsE;
+      // Act in a known order: only `me` acts if `it` is marked newborn this tick.
+      w.bornTick[it] = 1;
+      run(w, 1);
+      return { me: w.energy[me], it: w.energy[it], itAlive: w.color[it] !== -1, eaten: w.eaten };
+    };
+    let r = run1('share', 0, 12, 1);
+    check('share, unlike: drinks 5 of 12', r.me === 5 && r.it === 7 && r.itAlive, JSON.stringify(r));
+    r = run1('share', 3, 0, 0);
+    check('share, like: pours all it has (3 < 5)', r.me === 0 && r.it === 3, JSON.stringify(r));
+    r = run1('share', 0, 4, 1);
+    check('share, unlike, drained to 0: survives', r.me === 4 && r.it === 0 && r.itAlive, JSON.stringify(r));
+    r = run1('eat', 0, 4, 1);
+    check('eat, unlike, drained to 0: eaten', r.me === 4 && !r.itAlive && r.eaten === 1, JSON.stringify(r));
+    r = run1('eat', 0, 12, 1);
+    check('eat, unlike, not drained: survives', r.me === 5 && r.it === 7 && r.itAlive && r.eaten === 0, JSON.stringify(r));
+  }
+
+  // Bit-for-bit: the payoff rule with the match / mismatch table IS that rule, run for run.
+  for (const tbl of ['match', 'mismatch']) {
+    const go = (over) => {
+      Object.assign(P, DEFAULTS, { seed: 808, gridCols: 40, gridRows: 40 }, over);
+      const w = new World(); run(w, 300);
+      return w;
+    };
+    const a = go({ energyRule: tbl }), b = go({ energyRule: 'payoff', payoffTable: tbl });
+    let same = a.population() === b.population();
+    for (let i = 0; same && i < a.N; i++) same = a.color[i] === b.color[i] && a.energy[i] === b.energy[i];
+    check('payoff/' + tbl + ' table replays the ' + tbl + ' rule exactly (300 ticks)', same,
+          'pop ' + a.population() + ' vs ' + b.population());
+  }
+  Object.assign(P, DEFAULTS);
+
   // Founders are funded in children, so raising reproCost cannot starve them.
   Object.assign(P, DEFAULTS, { seed: 31, reproCost: 45 });
   const wf = new World();
   let funded = true;
   for (let i = 0; i < wf.N; i++) if (wf.color[i] !== -1 && wf.energy[i] !== 45) funded = false;
   check('founders start with founderChildren x reproCost energy', funded && DEFAULTS.founderChildren === 1);
+  Object.assign(P, DEFAULTS);
+}
+
+// ─── 8b. PER-RULE REPRODUCTION COST — threshold = reproCost + reproCostPerRule x filled ─────
+// The walker has exactly 2 filled rules, so at reproCost 0 and 5 per rule it needs 10. It
+// earns 1 per tick (colour change) BEFORE the reproduction check, so 8 → 9 falls short and
+// 9 → 10 reproduces, paying all 10.
+console.log('per-rule reproduction cost');
+{
+  const { walkerGenome, filledRules } = globalThis;
+  check('walker carries 2 filled rules', filledRules(walkerGenome(), 0, 6) === 2);
+  const tryWith = (start) => {
+    const w = bare({ reproCost: 0, reproCostPerRule: 5 });
+    const i = 20 * w.rows + 20;
+    w.place(i, 0, 0, walkerGenome());
+    w.energy[i] = start;
+    run(w, 1);
+    return { births: w.births, energy: w.energy[i] };
+  };
+  const short = tryWith(8), enough = tryWith(9);
+  check('9 energy < threshold 10: no child', short.births === 0 && short.energy === 9,
+        'births=' + short.births + ' energy=' + short.energy);
+  check('10 energy = threshold 10: child, pays all 10', enough.births === 1 && enough.energy === 0,
+        'births=' + enough.births + ' energy=' + enough.energy);
+
+  Object.assign(P, DEFAULTS, { seed: 32, reproCostPerRule: 1, absentP: 0.15 });
+  const wf = new World();
+  let funded = true, varied = new Set();
+  for (let i = 0; i < wf.N; i++) {
+    if (wf.color[i] === -1) continue;
+    const need = DEFAULTS.reproCost + filledRules(wf.genome, i * wf.ncond, wf.ncond);
+    varied.add(need);
+    if (wf.energy[i] !== DEFAULTS.founderChildren * need) funded = false;
+  }
+  check('founders funded at their own threshold', funded && varied.size > 1,
+        'thresholds seen: ' + [...varied].sort().join(','));
+  Object.assign(P, DEFAULTS);
+}
+
+// ─── 9a. FOUNDERS ARE VIABLE IN OPEN SPACE — no absent rule where the faced cell is empty ──
+// The off case must show absent open-space slots, or the on case's "none" proves nothing.
+console.log('founder open-space rules');
+{
+  const { condIndex, RULE_ABSENT } = globalThis;
+  const openAbsent = (on, n) => {
+    Object.assign(P, DEFAULTS, { seed: 77, n, founderOpenRules: on, initialSeeds: 400, absentP: 0.15 });
+    const w = new World();
+    let absent = 0, other = 0, founders = 0;
+    for (let i = 0; i < w.N; i++) {
+      if (w.color[i] === -1) continue;
+      founders++;
+      for (let q = 0; q < w.ncond; q++) {
+        if (w.genome[i * w.ncond + q] !== RULE_ABSENT) continue;
+        if (q % (n + 1) === 0) absent++; else other++;
+      }
+    }
+    return { absent, other, founders };
+  };
+  check('shipped default is on', DEFAULTS.founderOpenRules === true);
+  for (const n of [2, 6]) {
+    const on = openAbsent(true, n), off = openAbsent(false, n);
+    check('n=' + n + ': on, no founder lacks a facing-empty rule', on.absent === 0 && on.other > 0,
+          on.founders + ' founders, ' + on.other + ' absent elsewhere');
+    check('n=' + n + ': off, some founders do (the check can fail)', off.absent > 0,
+          off.absent + ' absent facing-empty slots');
+  }
+  // Empty indexes to 0 in condIndex, which is what q % (n+1) === 0 assumes.
+  check('facing-empty conditions are q % (n+1) === 0', [0, 1, 5].every((s) => condIndex(s, -1, 6) % 7 === 0));
+  Object.assign(P, DEFAULTS);
+}
+
+// ─── 9. COLOUR CAP — the Int8 genome holds n <= 42 (21 with movement), and no further ──────
+// Every rule code at the cap must survive the Int8 round trip, and one past the cap must be
+// refused: an overflowed code wraps negative and silently reads as some other rule.
+console.log('colour cap');
+{
+  const { maxColours, nOutputs, RULE_ABSENT } = globalThis;
+  for (const movement of [false, true]) {
+    Object.assign(P, DEFAULTS, { seed: 42, movement });
+    const cap = maxColours(), tag = movement ? ' (movement on)' : '';
+    check('cap is ' + (movement ? 21 : 42) + tag, cap === (movement ? 21 : 42), 'maxColours=' + cap);
+    P.n = cap;
+    const w = new World();
+    const top = nOutputs(cap) - 1;
+    let ok = true, seenTop = false;
+    for (let i = 0; i < w.N; i++) {
+      if (w.color[i] === -1) continue;
+      for (let q = 0; q < w.ncond; q++) {
+        const v = w.genome[i * w.ncond + q];
+        if (v !== RULE_ABSENT && (v < 0 || v > top)) ok = false;
+        if (v === top) seenTop = true;
+      }
+    }
+    check('n=' + cap + tag + ': every founder rule code in 0..' + top, ok && seenTop,
+          seenTop ? '' : 'top code never drawn, so the check could not fail');
+    run(w, 50);
+    check('n=' + cap + tag + ': runs 50 ticks', w.population() > 0, 'pop=' + w.population());
+    P.n = cap + 1;
+    let threw = false;
+    try { new World(); } catch (e) { threw = true; }
+    check('n=' + (cap + 1) + tag + ' is refused', threw);
+  }
   Object.assign(P, DEFAULTS);
 }
 

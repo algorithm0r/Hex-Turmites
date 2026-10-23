@@ -94,6 +94,7 @@ var Stats = class Stats {
       births: w.birthsThisPeriod,
       deaths: w.deathsThisPeriod,
       moves: w.movesThisPeriod,
+      eaten: w.eatenThisPeriod,
       distinct: counts.size,
       effective: pop ? Math.exp(H) : 0,        // Hill N1
       simpson: pop ? 1 / simpson : 0,          // Hill N2 (inverse Simpson)

@@ -40,6 +40,17 @@ Turmites with heredity on a hex grid: each organism is a 2D Turing machine with 
   bit-for-bit. A lone organism earns nothing under the neighbour rules, so random founders
   start with `founderChildren x reproCost` energy, and the spinner/walker/crawler demos force
   `'change'` (alone on the grid, they would never reproduce otherwise).
+- **More incomes and transfers are options, all off by default:** `'payoff'` (n x n table;
+  its `match` / `mismatch` tables replay those rules bit-for-bit, smoke-pinned), `'diversity'`,
+  `faceTransfer` `'share'` / `'eat'` (drink from the unlike faced neighbour, pour into a like
+  one; `'eat'` kills one drunk to 0), and `reproCostPerRule` (threshold = reproCost + k x
+  filled rules; 0 = the flat cost exactly).
+- **`absentP` is 0 by default (since 2026-10-23)**, so at defaults no rule is ever absent and
+  rule-absence death never fires; set 0.15 for the earlier lethality. Random founders always
+  carry rules for the facing-empty conditions (`founderOpenRules`).
+- **n is capped at 42 (21 with movement) by the Int8 genome**: the top rule code
+  `nOutputs(n)-1` must fit in 127. `World` throws past it; never widen the cap without moving
+  the genome to a wider array, or codes wrap and silently become other rules.
 - `reproCost` 20 was calibrated against the `'change'` income (~1/tick). Neighbour income runs
   0-6/tick, so under the default it barely constrains: mean energy sits ~230 and the grid still
   saturates. Raising it only delays saturation (measured 2026-10-11, see DEVPLAN).

@@ -26,7 +26,21 @@ default), or per neighbour whose colour **matches**, or (the Stage 1 rule) one u
 rule changed its colour. By default only living neighbours count. Tick **Empty neighbour =
 mismatch** to make open space pay too. Because a lone organism earns nothing under the
 neighbour rules, random founders start with energy for **Founder children** births. The
-spinner, walker and crawler demos switch to the colour-change rule.
+spinner, walker and crawler demos switch to the colour-change rule. Two more choices:
+**payoff table**, where each living neighbour pays `payoffTable[your colour][its colour]` (the
+**Payoff table** dropdown: match, mismatch, cyclic, seeded random, or a custom matrix set from
+the console) and each empty one pays **Empty neighbour pays**; and **neighbour diversity**, one
+unit per distinct colour, other than your own, among your neighbours.
+
+**Faced neighbour** (off by default) trades energy with the living cell an organism faced: it
+drinks up to **Transfer amount** from an unlike neighbour and pours that much into a like one.
+**Eat** also kills a neighbour drunk to zero. **Repro cost per rule** (0 by default) adds that
+much to the reproduction cost for every rule the parent carries.
+
+**Colours (n)** goes up to 42 (21 with movement on, which pulls n down if needed). Every rule is
+filled by default (**Absent-rule p** 0); raise it to bring back death by missing rule. With
+**Founders viable in open space** on (default), random founders always have rules for facing an
+empty cell.
 
 **Movement** (checkbox, or `M`; off by default) gives every rule a move bit. A rule that says
 move, firing while the faced cell is empty, steps the organism into that cell and, if it can

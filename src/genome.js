@@ -26,6 +26,10 @@ function movementOn() { return !!PARAMETERS.movement; }
 function nConditions(n) { return n * (n + 1); }
 function nOutputs(n) { return 3 * n * (movementOn() ? 2 : 1); }   // excludes RULE_ABSENT
 function genomeSpaceSize(n) { return Math.pow(nOutputs(n) + 1, n * (n + 1)); }
+// Genomes are Int8Array, so the largest rule code, nOutputs(n) - 1, must be <= 127: n <= 42
+// with movement off, n <= 21 with it on. Past that a code wraps negative and silently becomes
+// a different rule (or a fake RULE_ABSENT), so World refuses to build rather than run corrupt.
+function maxColours() { return Math.floor(128 / nOutputs(1)); }
 
 function condIndex(self, facedColor, n) { return self * (n + 1) + (facedColor + 1); }
 function outCode(color, rot, move, n) { return color * 3 + rot + (move ? 3 * n : 0); }
@@ -98,13 +102,31 @@ function genomeKey(g, base, ncond) {
 }
 
 // Random genome. `absentP` is the probability a slot is absent (death) — the dial that
-// sets how lethal the initial population is.
-function randomGenome(n, absentP, out, base) {
+// sets how lethal the initial population is. With `fillOpen`, the n facing-empty conditions
+// (q % (n+1) === 0, since empty indexes to 0) always get a rule, so a founder is viable in
+// open space and absentP only bites once it meets other organisms. Off, the draw sequence
+// is the original one, so old seeds replay exactly.
+function randomGenome(n, absentP, out, base, fillOpen) {
   const ncond = nConditions(n), nout = nOutputs(n);
   for (let q = 0; q < ncond; q++) {
+    if (fillOpen && q % (n + 1) === 0) { out[base + q] = randomInt(nout); continue; }
     out[base + q] = random() < absentP ? RULE_ABSENT : randomInt(nout);
   }
   return out;
+}
+
+function filledRules(g, base, ncond) {
+  let k = 0;
+  for (let q = 0; q < ncond; q++) if (g[base + q] !== RULE_ABSENT) k++;
+  return k;
+}
+
+// The energy an organism needs to reproduce, and pays when it does: a flat reproCost plus
+// reproCostPerRule for each rule its genome has filled. Carrying a rule is then paid for at
+// every birth, which lets selection weigh a rule's price against the death it prevents.
+function reproThreshold(g, base, ncond) {
+  const k = PARAMETERS.reproCostPerRule;
+  return k ? PARAMETERS.reproCost + k * filledRules(g, base, ncond) : PARAMETERS.reproCost;
 }
 
 // Point mutation on copy: each slot independently reassigned with probability `rate`.

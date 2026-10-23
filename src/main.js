@@ -20,7 +20,17 @@ function fitCanvas() {
   cv.height = Math.max(320, Math.ceil(PARAMETERS.gridRows * size * sqrt3 + size * 2));
 }
 
+// The colour slider goes to 42, but movement halves the cap (maxColours), so turning movement
+// on at a high n pulls n down rather than building a world that would throw.
+function capColours() {
+  if (PARAMETERS.n <= maxColours()) return false;
+  PARAMETERS.n = maxColours();
+  refreshControls();
+  return true;
+}
+
 function reset() {
+  const capped = capColours();
   gameEngine.clear();
   fitCanvas();
   world = new World();
@@ -34,7 +44,8 @@ function reset() {
   gameEngine.add(new Observer(world));
   gameEngine.add(dataManager);
   gameEngine.add(views);
-  setStatus('seeded ' + world.population() + ' organisms');
+  setStatus('seeded ' + world.population() + ' organisms' +
+            (capped ? ' — n capped at ' + world.n + ' (movement on)' : ''));
 }
 
 // Seed the grid with one hand-written organism instead of a random population — the two
@@ -75,9 +86,11 @@ function toggleFaces() { PARAMETERS.showFaces = !PARAMETERS.showFaces; }
 // Movement changes the genome encoding, so a toggle always starts a fresh world.
 function toggleMovement() {
   PARAMETERS.movement = !PARAMETERS.movement;
+  const capped = PARAMETERS.n > maxColours();
   reset();
   refreshControls();
-  setStatus('movement ' + (PARAMETERS.movement ? 'ON' : 'OFF') + ' — world reset');
+  setStatus('movement ' + (PARAMETERS.movement ? 'ON' : 'OFF') + ' — world reset' +
+            (capped ? ', n capped at ' + world.n : ''));
 }
 function setStatsPage(i) { PARAMETERS.statsPage = i; }
 

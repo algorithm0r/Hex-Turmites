@@ -3,6 +3,63 @@ Newest entry on top. **Append only — never edit past entries.**
 
 <!-- append new entries above this line -->
 
+## 2026-10-23 — up to 42 colours; payoff/diversity income; drink/pour/eat; absentP 0 default
+
+**Done:** a lethal-rule study, then five model options (all chosen by Chris).
+- **Colour cap raised from 6 to 42 (21 with movement).** The cap is the Int8 genome: the top
+  code `nOutputs(n)-1` must fit in 127. `maxColours()` computes it, `World` throws past it
+  (an overflowed code would silently read as another rule), and the browser caps n at 21 when
+  movement goes on. Genome = n(n+1) slots: 6 at n=2, 42 at n=6, 1,806 at n=42.
+- **`founderOpenRules`** (default on): random founders always have a rule for every
+  facing-empty condition, so they are viable in open space. Mutation is unaffected.
+- **`reproCostPerRule`** (default 0, Chris: keep it off for now): reproduction threshold, and
+  price, = reproCost + k x the parent's filled rules.
+- **`absentP` default 0.15 → 0.** Every rule filled, mutation never blanks one: rule-absence
+  death never happens at defaults, so the only death is `pDeath` unless eating is on.
+- **Two new incomes.** `'payoff'`: payoffTable[own][neighbour] per living neighbour,
+  `emptyPayoff` per empty one; tables `match`, `mismatch` (both replay the old rules exactly),
+  `cyclic` (earn only from (own+1) mod n), `random` (seeded side stream, founders unshifted),
+  `custom` (`payoffMatrix`). `'diversity'`: one unit per distinct colour other than its own
+  among living neighbours.
+- **`faceTransfer`** (default `'none'`): with the living cell it sensed, an organism drinks up
+  to `transferAmount` (5) from an unlike neighbour and pours up to it into a like one. `'eat'`
+  adds: a neighbour drunk to 0 dies, counted as `eaten`.
+
+**Measured** (scratch scripts, 3-5 seeds, old defaults absentP 0.15 unless said):
+- Missing rules purge fast at n=2 (slot share 0.15 → 0.004 by t=300 → 0.001 at saturation),
+  slower at n=6 (0.054 at t=400, ~0.004 floor). At n=6, missing-rule deaths reach ~2.8% per
+  organism-tick while the population grows, nearly 3x pDeath.
+- Under mismatch income every n ≥ 30 went extinct (0/5) and n=21 was 1/5; open-space
+  founders made n=30 and n=42 5/5. With movement on, n ≥ 12 still died out under mismatch
+  (1/5, 0/5) but survived 5/5 under `'change'` income.
+- Per-rule cost: n=2 never drops a rule at any k (all six conditions are used). Under
+  `'change'` at n=6, k=0.5 gives the first shedding (37-40 of 42 filled); k ≥ 1 kills.
+  At n=42 filled stays ~85% (= 1-absentP, the mutation-only level) at every k: the cost
+  shrinks or kills the population without reshaping genomes; most slots look neutral.
+- New options at absentP 0, t=2000, 3 seeds: share 5 raises n=2 unlike-neighbour fraction
+  0.44 → 0.475; cyclic at n=6 halves population (4,029); **eat under mismatch is 1/3 alive at
+  n=2, 0/3 at n=6**; change+eat at n=2 holds ~5,000 (density ~0.53) 3/3, and at n=6 the one
+  survivor collapsed to ~2.4 effective colours.
+
+**Changed:** `genome.js` (`maxColours`, `filledRules`, `reproThreshold`, `randomGenome`
+fillOpen), `world.js` (cap guard, payoff table, diversity, face transfer, `eaten` counters,
+per-rule threshold incl. founder funding and the move-birth path), `params.js` (new params +
+controls, n slider to 42, absentP 0), `main.js` (`capColours`), `stats.js` /
+`datamanager.js` (samples carry `eaten`), `smoketest.mjs` (+30 checks; the purge check now
+compares to the founding level, or demands zero absent rules at absentP 0). CLAUDE.md and
+README updated for the new options and defaults.
+
+**State:** smoke 81/81 PASS @ 90891db-dirty (pre-commit; this session's commit follows).
+Shipped defaults now: seed 606 t=1000 density 0.989, meanEnergy 248.5, lethal 0.0%. Browser
+checked on the local server: n=42 builds, movement caps n at 21 by checkbox and `M`,
+payoff/cyclic + eat runs 200 ticks, no console errors. Not seen: the gene-pool page at
+n=42 (1,806 rows), frame rate with the pane visible. Nothing pushed.
+
+**Next:** why eating kills (guess, untested: newborns start at 0 energy, so an unlike neighbour
+eats them on sight; try `childEnergy` > 0 or kill only prey that had energy). change+eat
+looks like the first non-saturating regime: check it is sustained over longer runs and
+more seeds. Neighbour diversity and cyclic payoff want n ≥ 3 runs.
+
 ## 2026-10-16 — movement toggle; energy from neighbour colours (mismatch is the new default)
 *(Work done 2026-10-11, logged 2026-10-16.)*
 

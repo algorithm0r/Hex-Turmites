@@ -9,7 +9,8 @@
 //   2. look up cond = (self colour, faced colour) in the genome
 //   3. no rule → die. Otherwise the rule gives (next colour, rotation)
 //   4. earn energy (energyRule, below); rotation costs
-//   5. if the SENSED cell was empty and energy >= reproCost, place a mutated child in it
+//   5. if the SENSED cell was empty and energy >= the reproduction threshold (reproCost, plus
+//      reproCostPerRule per filled rule: reproThreshold), place a mutated child in it
 //
 // Step 5 uses the PRE-rotation face deliberately: the organism reproduces into the cell it
 // actually looked at, and the rotation takes effect for the next tick. That is what makes
@@ -21,7 +22,15 @@
 //                cells as different: emptyIsMismatch). Rewards sitting against the other colour.
 //   'match'    — one unit per neighbour of the same colour. Rewards same-colour clumps.
 //   'change'   — one unit when the rule changed the organism's colour (the Stage 1 economy).
+//   'payoff'   — payoffTable[own][neighbour] per living neighbour, emptyPayoff per empty one.
+//                The 'match' and 'mismatch' tables reproduce those two rules exactly.
+//   'diversity'— one unit per distinct colour, other than its own, among living neighbours.
 // Neighbours are read live, so under async update some have already acted this tick.
+//
+// FACE TRANSFER (PARAMETERS.faceTransfer, off by default). After earning, an organism that
+// sensed a living cell trades energy with it: it drinks up to transferAmount from a neighbour
+// whose colour differs from its own (post-rule) colour, and pours up to transferAmount into
+// one of the same colour. Under 'eat', a neighbour drunk down to 0 dies: predation.
 //
 // MOVEMENT (PARAMETERS.movement, off by default). A rule whose move bit is set, firing while
 // the sensed cell is empty, replaces step 5: the organism steps INTO the sensed cell (paying
@@ -41,6 +50,10 @@ var World = class World {
     this.rows = P.gridRows;
     this.N = this.cols * this.rows;
     this.n = P.n;
+    if (this.n > maxColours()) {
+      throw new Error('n=' + this.n + ' overflows the Int8 genome: max ' + maxColours() +
+                      ' colours with movement ' + (movementOn() ? 'on' : 'off'));
+    }
     this.ncond = nConditions(this.n);
 
     this.color  = new Int8Array(this.N).fill(-1);   // -1 = empty
@@ -67,6 +80,8 @@ var World = class World {
     this.birthsThisPeriod = 0;
     this.deathsThisPeriod = 0;
     this.movesThisPeriod = 0;
+    this.eaten = 0;
+    this.eatenThisPeriod = 0;
 
     this.seed();
   }
@@ -82,7 +97,7 @@ var World = class World {
       const i = randomInt(this.N);
       if (this.color[i] !== -1) continue;              // occupied — skip, don't retry
       this.place(i, randomInt(this.n), randomInt(6), named);
-      this.energy[i] = (P.founderChildren || 0) * P.reproCost;
+      this.energy[i] = (P.founderChildren || 0) * reproThreshold(this.genome, i * this.ncond, this.ncond);
     }
   }
 
@@ -90,12 +105,41 @@ var World = class World {
   place(i, color, face, src) {
     const base = i * this.ncond;
     if (src) this.genome.set(src, base);
-    else randomGenome(this.n, PARAMETERS.absentP, this.genome, base);
+    else randomGenome(this.n, PARAMETERS.absentP, this.genome, base, PARAMETERS.founderOpenRules);
     this.color[i] = color;
     this.face[i] = face;
     this.energy[i] = 0;
     this.bornTick[i] = -1;
     return i;
+  }
+
+  // The payoff rule's table, row = own colour, rebuilt only when payoffTable or payoffMatrix
+  // changes, so it can be switched live like energyRule. 'random' draws from a side stream
+  // seeded by the run's seed: it neither shifts the founders nor changes between rebuilds.
+  payoffTable() {
+    const P = PARAMETERS, kind = P.payoffTable;
+    if (this._payoff && this._payoffKind === kind && this._payoffSrc === P.payoffMatrix) return this._payoff;
+    const n = this.n, t = new Float64Array(n * n);
+    if (kind === 'random') {
+      const saved = _rngState;
+      setSeed(this.rngSeed ^ 0x2545f491);
+      for (let k = 0; k < n * n; k++) t[k] = random();
+      _rngState = saved;
+    } else if (kind === 'custom') {
+      const M = P.payoffMatrix;
+      if (!M || M.length !== n || M.some((r) => !r || r.length !== n)) {
+        throw new Error('payoffMatrix must be an ' + n + ' x ' + n + ' array');
+      }
+      for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) t[a * n + b] = +M[a][b];
+    } else if (kind === 'match' || kind === 'mismatch' || kind === 'cyclic') {
+      for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) {
+        t[a * n + b] = kind === 'match' ? +(a === b) : kind === 'mismatch' ? +(a !== b) : +(b === (a + 1) % n);
+      }
+    } else {
+      throw new Error('unknown payoffTable "' + kind + '"');
+    }
+    this._payoff = t; this._payoffKind = kind; this._payoffSrc = P.payoffMatrix;
+    return t;
   }
 
   kill(i) {
@@ -116,8 +160,12 @@ var World = class World {
     const mutationRate = P.mutationRate, absentP = P.absentP;
     const movement = this.movement, moveCost = P.moveCost;
     const nbr = this.nbr;
-    const eRule = P.energyRule === 'match' ? 1 : P.energyRule === 'change' ? 0 : 2;   // 2 = mismatch
+    const eRule = { change: 0, match: 1, mismatch: 2, payoff: 3, diversity: 4 }[P.energyRule];
+    if (eRule === undefined) throw new Error('unknown energyRule "' + P.energyRule + '"');
     const emptyPays = eRule === 2 && !!P.emptyIsMismatch;
+    const payoff = eRule === 3 ? this.payoffTable() : null, emptyPayoff = P.emptyPayoff;
+    const xfer = { none: 0, share: 1, eat: 2 }[P.faceTransfer], xferAmt = P.transferAmount;
+    if (xfer === undefined) throw new Error('unknown faceTransfer "' + P.faceTransfer + '"');
 
     // Snapshot who is alive at the start of the tick. Organisms born during this tick are
     // not in the list, and the bornTick guard keeps a newborn from acting before its first
@@ -153,7 +201,7 @@ var World = class World {
       const nextColor = outColor(out, n), rot = outRot(out);
       let e = energy[i];
       if (nextColor !== self) { color[i] = nextColor; if (eRule === 0) e += earn; }
-      if (eRule !== 0) {
+      if (eRule === 1 || eRule === 2) {
         let k = 0;
         for (let d = i * 6, end = d + 6; d < end; d++) {
           const c = color[nbr[d]];
@@ -161,9 +209,42 @@ var World = class World {
           else if ((c === nextColor) === (eRule === 1)) k++;
         }
         e += earn * k;
+      } else if (eRule === 3) {
+        let k = 0;
+        const rowBase = nextColor * n;
+        for (let d = i * 6, end = d + 6; d < end; d++) {
+          const c = color[nbr[d]];
+          k += c === -1 ? emptyPayoff : payoff[rowBase + c];
+        }
+        e += earn * k;
+      } else if (eRule === 4) {
+        let k = 0;
+        const d0 = i * 6;
+        for (let d = d0; d < d0 + 6; d++) {
+          const c = color[nbr[d]];
+          if (c === -1 || c === nextColor) continue;
+          let seen = false;
+          for (let d2 = d0; d2 < d; d2++) if (color[nbr[d2]] === c) { seen = true; break; }
+          if (!seen) k++;
+        }
+        e += earn * k;
       }
       if (rot !== ROT_NONE) { face[i] = rotateFace(f, rot); e -= rotationCost; }
       if (e < 0) e = 0;
+
+      // 4b. face transfer with the living cell it sensed: drink from unlike, pour into like
+      if (xfer && faced !== -1) {
+        if (faced !== nextColor) {
+          const take = energy[j] < xferAmt ? energy[j] : xferAmt;
+          energy[j] -= take;
+          e += take;
+          if (xfer === 2 && energy[j] <= 0) { this.kill(j); this.eaten++; this.eatenThisPeriod++; }
+        } else {
+          const give = e < xferAmt ? e : xferAmt;
+          e -= give;
+          energy[j] += give;
+        }
+      }
 
       // 5m. move into the cell just sensed, leaving a child behind if the energy is there
       if (movement && faced === -1 && outMoves(out, n)) {
@@ -176,8 +257,9 @@ var World = class World {
         bornTick[j] = bornTick[i];               // j was empty at the snapshot, so it won't act again
         this.moves++;
         this.movesThisPeriod++;
-        if (e >= reproCost) {
-          e -= reproCost;                        // i still holds the parent's genome: mutate in place
+        const cost = reproThreshold(genome, pbase, ncond);   // the parent's genome, pre-mutation
+        if (e >= cost) {
+          e -= cost;                             // i still holds the parent's genome: mutate in place
           if (mutationRate > 0) mutateGenome(genome, pbase, n, mutationRate, absentP);
           this._birth(i, nextColor, f, childOri, childEnergy, t);
         } else {
@@ -189,8 +271,10 @@ var World = class World {
       }
 
       // 5. reproduce into the cell just sensed, if it was empty and the energy is there
-      if (faced === -1 && e >= reproCost) {
-        e -= reproCost;
+      // (reproCost is the threshold's floor, so the rule count is only taken when it might pass)
+      const cost = faced === -1 && e >= reproCost ? reproThreshold(genome, i * ncond, ncond) : Infinity;
+      if (e >= cost) {
+        e -= cost;
         const cbase = j * ncond, pbase = i * ncond;
         for (let q = 0; q < ncond; q++) genome[cbase + q] = genome[pbase + q];
         if (mutationRate > 0) mutateGenome(genome, cbase, n, mutationRate, absentP);
@@ -257,8 +341,11 @@ var World = class World {
       births: this.birthsThisPeriod,
       deaths: this.deathsThisPeriod,
       moves: this.movesThisPeriod,
+      eaten: this.eatenThisPeriod,
     };
   }
 
-  resetPeriodCounters() { this.birthsThisPeriod = 0; this.deathsThisPeriod = 0; this.movesThisPeriod = 0; }
+  resetPeriodCounters() {
+    this.birthsThisPeriod = 0; this.deathsThisPeriod = 0; this.movesThisPeriod = 0; this.eatenThisPeriod = 0;
+  }
 };
